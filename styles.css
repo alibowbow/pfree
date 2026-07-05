@@ -61,9 +61,64 @@ body { display: flex; flex-direction: column; height: 100vh; }
 .pp .warnbox { background: #fdecec; border: 1px solid #f5c2c2; color: #a11; border-radius: 6px; padding: 6px 8px; margin-top: 6px; font-size: 12px; }
 .pp .graybox { background: #fff7e0; border: 1px solid #f0d98a; color: #7a5b00; border-radius: 6px; padding: 6px 8px; margin-top: 6px; font-size: 12px; }
 .pp .badge { font-size: 11px; border-radius: 5px; padding: 1px 6px; border: 1px solid var(--line); color: var(--muted); }
+.pp-actions { display: flex; gap: 6px; margin-top: 10px; }
+.pp-actions .btn { flex: 1; }
+
+/* 버튼 */
+.btn { font: inherit; font-size: 13px; padding: 7px 10px; border: 1px solid var(--line); background: #fff; border-radius: 8px; cursor: pointer; color: var(--text); }
+.btn:hover { background: #f0f2f5; }
+.btn.primary { background: var(--free); border-color: var(--free); color: #fff; font-weight: 600; }
+.btn.primary:hover { filter: brightness(1.05); }
+.btn.danger { background: #fff; border-color: var(--warning); color: var(--warning); }
+.btn.danger:hover { background: #fdecec; }
+.btn.small { font-size: 12px; padding: 4px 8px; }
+
+.mine #btn-add { width: 100%; margin-bottom: 8px; }
+.mine-row { display: flex; gap: 6px; }
+.mine-row .btn { flex: 1; }
+.muted-s { font-size: 11px; color: var(--muted); margin-top: 6px; }
+
+/* 편집 패널 */
+#editor { flex: 0 0 320px; background: var(--bg); border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+#editor.hidden { display: none; }
+.hidden { display: none !important; }
+.ed-head { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--line); font-weight: 700; }
+.ed-head .x { border: none; background: none; font-size: 16px; cursor: pointer; color: var(--muted); }
+.ed-body { flex: 1 1 auto; overflow-y: auto; padding: 14px; }
+.ed-foot { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-top: 1px solid var(--line); }
+.ed-foot .spacer { flex: 1; }
+
+.hint { background: #eef6ff; border: 1px solid #cfe3fb; color: #24557e; border-radius: 8px; padding: 8px 10px; font-size: 12px; margin-bottom: 12px; }
+.fld { display: block; font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+.fld input[type=text], .fld input[type=number], .fld select, .fld textarea {
+  display: block; width: 100%; margin-top: 4px; font: inherit; font-size: 14px; color: var(--text);
+  padding: 7px 8px; border: 1px solid var(--line); border-radius: 8px; background: #fff; box-sizing: border-box;
+}
+.fld textarea { resize: vertical; }
+.two { display: flex; gap: 10px; }
+.two .fld { flex: 1; }
+
+.rules-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; color: var(--muted); font-size: 12px; }
+.presets { display: flex; gap: 4px; }
+.chip { font-size: 11px; padding: 2px 7px; border: 1px solid var(--line); border-radius: 999px; background: #f7f8fa; cursor: pointer; color: var(--text); }
+.chip:hover { background: #eceff2; }
+.rule { display: grid; grid-template-columns: 1fr 1fr auto; gap: 5px; align-items: center; padding: 7px; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 6px; background: var(--panel); }
+.rule select, .rule input { font: inherit; font-size: 12px; padding: 4px; border: 1px solid var(--line); border-radius: 6px; width: 100%; box-sizing: border-box; }
+.rule .rule-times { display: flex; gap: 4px; grid-column: 1 / 3; }
+.rule .rule-min { grid-column: 1 / 3; }
+.rule .rm { border: none; background: none; color: var(--warning); cursor: pointer; font-size: 14px; }
+
+.chk-line { display: flex; align-items: flex-start; gap: 7px; font-size: 12px; color: var(--text); line-height: 1.4; }
+.chk-line input { margin-top: 2px; }
+.warn-note { background: #fdecec; border: 1px solid #f5c2c2; color: #a11; border-radius: 8px; padding: 8px 10px; font-size: 12px; margin-bottom: 12px; }
+.errors { color: var(--warning); font-size: 12px; line-height: 1.5; margin-top: 6px; white-space: pre-line; }
+
+/* 임시 배치 마커 */
+.place-pin { font-size: 26px; line-height: 26px; text-align: center; filter: drop-shadow(0 1px 2px rgba(0,0,0,.4)); cursor: grab; }
 
 @media (max-width: 720px) {
   #app { flex-direction: column; }
-  #panel { flex: 0 0 auto; max-height: 42vh; border-right: none; border-bottom: 1px solid var(--line); }
+  #panel { flex: 0 0 auto; max-height: 38vh; border-right: none; border-bottom: 1px solid var(--line); }
+  #editor { flex: 0 0 auto; max-height: 55vh; border-left: none; border-top: 1px solid var(--line); }
   #disclaimer { display: none; }
 }

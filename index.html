@@ -20,6 +20,17 @@
 
   <div id="app">
     <aside id="panel">
+      <section class="ctl mine">
+        <h2>내 제보 <small>(거지맵식 편집)</small></h2>
+        <button id="btn-add" class="btn primary">➕ 제보 추가</button>
+        <div class="mine-row">
+          <button id="btn-export" class="btn">⬇ 내보내기</button>
+          <button id="btn-import" class="btn">⬆ 가져오기</button>
+          <input type="file" id="file-import" accept="application/json" hidden />
+        </div>
+        <div id="mine-count" class="muted-s"></div>
+      </section>
+
       <section class="ctl">
         <h2>레이어</h2>
         <label class="chk"><input type="checkbox" id="lyr-free" checked> <span class="dot free"></span> 합법 무료</label>
@@ -68,6 +79,87 @@
     </aside>
 
     <div id="map"></div>
+
+    <aside id="editor" class="hidden" aria-hidden="true">
+      <div class="ed-head">
+        <span id="ed-title">제보 추가</span>
+        <button id="ed-close" class="x" title="닫기">✕</button>
+      </div>
+      <div class="ed-body">
+        <div id="ed-hint" class="hint">📍 지도를 클릭해 위치를 지정하세요 (마커를 끌어 미세조정 가능).</div>
+
+        <label class="fld">이름
+          <input id="f-name" type="text" placeholder="예: 주민센터 뒤 무료주차장" />
+        </label>
+
+        <label class="fld">분류
+          <select id="f-category">
+            <option value="legal_free">🟢 합법 무료</option>
+            <option value="gray_zone">🟡 단속 뜸한 곳 (불법·정보)</option>
+            <option value="no_parking">🔴 주차금지 경고</option>
+          </select>
+        </label>
+
+        <!-- 합법 무료 전용 -->
+        <div id="grp-free">
+          <div class="two">
+            <label class="fld">무료 유형
+              <select id="f-freetype">
+                <option>상시무료</option>
+                <option>시간제무료</option>
+                <option>공영개방</option>
+                <option>민간개방</option>
+              </select>
+            </label>
+            <label class="fld">주차면수
+              <input id="f-spaces" type="number" min="0" placeholder="선택" />
+            </label>
+          </div>
+
+          <div class="fld">
+            <div class="rules-head">무료 규칙
+              <span class="presets">
+                <button type="button" class="chip" data-preset="always">상시무료</button>
+                <button type="button" class="chip" data-preset="night">평일야간+주말</button>
+                <button type="button" class="chip" data-preset="firstN">최초 N분</button>
+              </span>
+            </div>
+            <div id="rules"></div>
+            <button type="button" id="rule-add" class="btn small">+ 규칙 추가</button>
+          </div>
+        </div>
+
+        <!-- gray_zone / no_parking 전용 -->
+        <div id="grp-risk" class="hidden">
+          <div class="two">
+            <label class="fld">위반 유형
+              <input id="f-zone" type="text" placeholder="예: 이면도로 주정차금지" />
+            </label>
+            <label class="fld">과태료
+              <input id="f-fine" type="text" placeholder="예: 4만원" />
+            </label>
+          </div>
+          <label id="guard" class="fld chk-line hidden">
+            <input id="f-guard" type="checkbox" />
+            <span>이 위치는 <b>소화전·스쿨존·횡단보도·버스정류소·교차로</b>가 <b>아님</b>을 확인합니다. (안전 치명 구역은 등록 불가)</span>
+          </label>
+          <div id="np-note" class="warn-note hidden">🔴 주차금지 경고로 등록됩니다. 추천이 아니라 <b>경고</b> 표시입니다.</div>
+        </div>
+
+        <label class="fld">메모
+          <textarea id="f-note" rows="2" placeholder="시간대·조건·주의사항 등"></textarea>
+        </label>
+
+        <div id="ed-coords" class="muted-s">좌표: (미지정)</div>
+        <div id="ed-errors" class="errors"></div>
+      </div>
+      <div class="ed-foot">
+        <button id="ed-delete" class="btn danger hidden">삭제</button>
+        <span class="spacer"></span>
+        <button id="ed-cancel" class="btn">취소</button>
+        <button id="ed-save" class="btn primary">저장</button>
+      </div>
+    </aside>
   </div>
 
   <script src="./vendor/leaflet/leaflet.js"></script>

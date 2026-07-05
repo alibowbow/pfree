@@ -17,8 +17,16 @@ python3 -m http.server 8000
 브라우저에서 열면 예시 시드 데이터로 지도가 뜬다. (모듈 import 때문에 `file://` 직접 열기는 안 되고 정적 서버 필요.)
 
 ```bash
-npm test           # 규칙 엔진 유닛 테스트 (node --test)
+npm test           # 규칙 엔진 + 사용자 제보 유닛 테스트 (node --test, 22개)
 ```
+
+## 내 제보 (거지맵식 사용자 편집)
+
+좌측 **‘제보 추가’** → 지도를 클릭해 위치 지정(📍 마커 드래그로 미세조정) → 이름·분류·무료규칙 입력 → 저장. 마커 팝업에서 **편집·삭제**. 데이터는 브라우저 **localStorage**에 저장되어 새로고침해도 유지되고, **⬇ 내보내기 / ⬆ 가져오기**(JSON)로 백업·공유할 수 있다(향후 백엔드 제보 API로 이어짐).
+
+- 시드 데이터는 읽기 전용, **내 제보만 편집 가능**(파란 테두리 마커).
+- **안전 가드**: ‘단속 뜸한 곳(불법)’ 제보는 *소화전·스쿨존·횡단보도·버스정류소·교차로가 아님*을 확인해야 등록된다. ‘주차금지’ 분류는 항상 경고(safety_critical)로 저장.
+- 순수 로직(`lib/userSpots.js`: 검증·안전가드·규칙 정규화·직렬화)은 UI와 분리해 유닛 테스트로 커버.
 
 ---
 
@@ -87,7 +95,7 @@ SERVICE_KEY=발급받은키 node scripts/ingest.mjs
 
 ## 기술 스택
 
-- **프로토타입**: Leaflet + OSM 타일 + `leaflet.markercluster`, 바닐라 JS(ES module), 규칙 엔진은 프레임워크 무관 순수 모듈.
+- **프로토타입**: Leaflet + `leaflet.markercluster` + **CARTO Voyager 레티나(@2x) 타일**(고해상도 화면 대응, `detectRetina`), 바닐라 JS(ES module). Leaflet은 `vendor/`에 포함해 설치·CDN 없이 동작. 규칙 엔진·제보 로직은 프레임워크 무관 순수 모듈.
 - **프로덕션 권장**: 베이스맵 **Kakao Map**(도로명·POI 우수, 1st-party 무료 클러스터러) + 지오코딩 **VWorld**(좌표 영구저장 가능) + 백엔드 **PostgreSQL/PostGIS**(반경검색·conflation).
 
 ---
@@ -95,7 +103,7 @@ SERVICE_KEY=발급받은키 node scripts/ingest.mjs
 ## 로드맵
 
 - **Phase 1** — 공공데이터 시드 → 무료 필터 → `free_rules` 정규화 → 지도 표시 + 안전경고 레이어. *(현재 프로토타입 = 이 구조 + 예시 데이터)*
-- **Phase 2** — 크라우드소싱: 원탭 "아직 무료?" 확인·제보, 사진 증빙, **GPS 반경 검증(proof-of-presence)**, 파괴적 편집 고증거, 속성별 시간감쇠 신뢰도.
+- **Phase 2** — 크라우드소싱: *(현재 = 로컬 편집/제보 + 내보내기·가져오기 구현)* → 다음은 백엔드 제보 API, 원탭 "아직 무료?" 확인, 사진 증빙, **GPS 반경 검증(proof-of-presence)**, 파괴적 편집 고증거, 속성별 시간감쇠 신뢰도.
 - **Phase 3** — 실시간 여유면수(KOTSA `15099883`), 거주자우선 개방 캘린더, 지역 확장, 합법 수익화(주차공유·개방 예약).
 
 ---
@@ -103,11 +111,14 @@ SERVICE_KEY=발급받은키 node scripts/ingest.mjs
 ## 파일 구조
 
 ```
-index.html · app.js · styles.css     지도 UI
+index.html · app.js · styles.css     지도 UI + 제보 편집기
 lib/freeRules.js                     "지금 무료냐" 규칙 엔진 (코어)
+lib/userSpots.js                     사용자 제보: 검증·안전가드·규칙정규화·저장
 lib/holidays.js                      공휴일(프로토타입용)
 data/*.seed.json                     3개 레이어 시드 데이터
+vendor/leaflet* · images             Leaflet 1.9.4 / markercluster 1.5.3 (오프라인)
 scripts/ingest.mjs                   data.go.kr ETL 스켈레톤
 scripts/serve.mjs                    무의존 정적 서버
-test/freeRules.test.js               규칙 엔진 유닛 테스트
+test/freeRules.test.js               규칙 엔진 유닛 테스트 (12)
+test/userSpots.test.js               제보 로직 유닛 테스트 (10)
 ```
