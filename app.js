@@ -314,6 +314,11 @@ els.onlyFree.addEventListener('change', render);
 els.simDay.addEventListener('change', render);
 els.simHour.addEventListener('input', () => { els.simHourLbl.textContent = fmtHM(Number(els.simHour.value) * 60); render(); });
 
+$('panel-toggle').addEventListener('click', () => {
+  document.body.classList.toggle('panel-collapsed');
+  setTimeout(() => map.invalidateSize(), 60); // 패널 접힘/펼침 후 지도 크기 재계산
+});
+
 $('btn-add').addEventListener('click', () => openEditor(null));
 $('btn-export').addEventListener('click', exportUser);
 $('btn-import').addEventListener('click', () => $('file-import').click());

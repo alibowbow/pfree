@@ -12,6 +12,7 @@
 </head>
 <body>
   <header id="topbar">
+    <button id="panel-toggle" title="메뉴 접기/펼치기" aria-label="메뉴 접기/펼치기">☰</button>
     <div class="brand">🅿️ 전국 무료주차맵 <span class="tag">MVP</span></div>
     <div id="disclaimer">
       ⚠️ 무료·합법 여부는 시간·정책에 따라 변할 수 있습니다. 최종 확인은 현장 표지판 기준, <b>주차 책임은 본인</b>에게 있습니다.
@@ -20,62 +21,76 @@
 
   <div id="app">
     <aside id="panel">
-      <section class="ctl mine">
-        <h2>내 제보 <small>(거지맵식 편집)</small></h2>
-        <button id="btn-add" class="btn primary">➕ 제보 추가</button>
-        <div class="mine-row">
-          <button id="btn-export" class="btn">⬇ 내보내기</button>
-          <button id="btn-import" class="btn">⬆ 가져오기</button>
-          <input type="file" id="file-import" accept="application/json" hidden />
+      <div id="stats"></div>
+
+      <details class="ctl mine" open>
+        <summary>내 제보</summary>
+        <div class="ctl-body">
+          <button id="btn-add" class="btn primary">➕ 제보 추가</button>
+          <div class="mine-row">
+            <button id="btn-export" class="btn">⬇ 내보내기</button>
+            <button id="btn-import" class="btn">⬆ 가져오기</button>
+            <input type="file" id="file-import" accept="application/json" hidden />
+          </div>
+          <div id="mine-count" class="muted-s"></div>
         </div>
-        <div id="mine-count" class="muted-s"></div>
-      </section>
+      </details>
 
-      <section class="ctl">
-        <h2>레이어</h2>
-        <label class="chk"><input type="checkbox" id="lyr-free" checked> <span class="dot free"></span> 합법 무료</label>
-        <label class="chk"><input type="checkbox" id="lyr-gray"> <span class="dot gray"></span> 단속 뜸한 곳(불법·정보)</label>
-        <label class="chk"><input type="checkbox" id="lyr-np" checked> <span class="dot warning"></span> 주차금지 경고</label>
-      </section>
-
-      <section class="ctl">
-        <h2>무료 유형</h2>
-        <label class="chk"><input type="checkbox" class="ft" value="상시무료" checked> 상시무료</label>
-        <label class="chk"><input type="checkbox" class="ft" value="시간제무료" checked> 시간제무료</label>
-        <label class="chk"><input type="checkbox" class="ft" value="공영개방" checked> 공영개방</label>
-        <label class="chk"><input type="checkbox" class="ft" value="민간개방" checked> 민간개방</label>
-      </section>
-
-      <section class="ctl">
-        <h2>기준 시각 <small>(“지금 무료냐?” 판정)</small></h2>
-        <label class="chk"><input type="radio" name="tm" id="tm-now" checked> 현재 시각</label>
-        <label class="chk"><input type="radio" name="tm" id="tm-sim"> 시각 지정</label>
-        <div id="sim-box">
-          <select id="sim-day">
-            <option value="평일">평일</option>
-            <option value="토요일">토요일</option>
-            <option value="일요일">일요일</option>
-            <option value="공휴일">공휴일</option>
-          </select>
-          <input type="range" id="sim-hour" min="0" max="23" value="21" />
-          <span id="sim-hour-lbl">21:00</span>
+      <details class="ctl" open>
+        <summary>레이어</summary>
+        <div class="ctl-body">
+          <label class="chk"><input type="checkbox" id="lyr-free" checked> <span class="dot free"></span> 합법 무료</label>
+          <label class="chk"><input type="checkbox" id="lyr-gray"> <span class="dot gray"></span> 단속 뜸한 곳(불법·정보)</label>
+          <label class="chk"><input type="checkbox" id="lyr-np" checked> <span class="dot warning"></span> 주차금지 경고</label>
         </div>
-        <label class="chk only-free"><input type="checkbox" id="only-free"> 지금 무료인 곳만</label>
-      </section>
+      </details>
 
-      <section class="ctl legend">
-        <h2>범례</h2>
-        <div><span class="dot free"></span> 지금 무료</div>
-        <div><span class="dot partial"></span> 조건부 무료(최초 N분 등)</div>
-        <div><span class="dot paid"></span> 지금 유료 / 무료시간대 아님</div>
-        <div><span class="dot gray"></span> 단속 뜸함(불법·본인책임)</div>
-        <div><span class="dot warning"></span> 주정차 절대금지(경고)</div>
-      </section>
+      <details class="ctl">
+        <summary>무료 유형</summary>
+        <div class="ctl-body">
+          <label class="chk"><input type="checkbox" class="ft" value="상시무료" checked> 상시무료</label>
+          <label class="chk"><input type="checkbox" class="ft" value="시간제무료" checked> 시간제무료</label>
+          <label class="chk"><input type="checkbox" class="ft" value="공영개방" checked> 공영개방</label>
+          <label class="chk"><input type="checkbox" class="ft" value="민간개방" checked> 민간개방</label>
+        </div>
+      </details>
 
-      <section class="ctl">
-        <div id="stats"></div>
-        <p class="src">데이터: 예시 시드. 실제는 <code>공공데이터포털 15012896 · 15077522 · 서울 OA-13122</code> 등에서 인제스트(<code>scripts/ingest.mjs</code>).</p>
-      </section>
+      <details class="ctl">
+        <summary>기준 시각</summary>
+        <div class="ctl-body">
+          <label class="chk"><input type="radio" name="tm" id="tm-now" checked> 현재 시각</label>
+          <label class="chk"><input type="radio" name="tm" id="tm-sim"> 시각 지정</label>
+          <div id="sim-box">
+            <select id="sim-day">
+              <option value="평일">평일</option>
+              <option value="토요일">토요일</option>
+              <option value="일요일">일요일</option>
+              <option value="공휴일">공휴일</option>
+            </select>
+            <input type="range" id="sim-hour" min="0" max="23" value="21" />
+            <span id="sim-hour-lbl">21:00</span>
+          </div>
+          <label class="chk only-free"><input type="checkbox" id="only-free"> 지금 무료인 곳만</label>
+        </div>
+      </details>
+
+      <details class="ctl legend">
+        <summary>범례</summary>
+        <div class="ctl-body">
+          <div><span class="dot free"></span> 지금 무료</div>
+          <div><span class="dot partial"></span> 조건부 무료(최초 N분 등)</div>
+          <div><span class="dot paid"></span> 지금 유료 / 무료시간대 아님</div>
+          <div><span class="dot gray"></span> 단속 뜸함(불법·본인책임)</div>
+          <div><span class="dot warning"></span> 주정차 절대금지(경고)</div>
+        </div>
+      </details>
+
+      <details class="ctl">
+        <summary>데이터 출처</summary>
+        <div class="ctl-body">
+          <p class="src">예시 시드. 실제는 <code>공공데이터포털 15012896 · 15077522 · 서울 OA-13122</code> 등에서 인제스트(<code>scripts/ingest.mjs</code>).</p>
+        </div>
+      </details>
     </aside>
 
     <div id="map"></div>
