@@ -1,0 +1,110 @@
+{
+  "type": "FeatureCollection",
+  "meta": {
+    "layer": "no_parking",
+    "note": "주정차 절대금지 구역 — 추천 대상이 아니라 '빨간 경고' 안전 레이어. 도로교통법 §32/§33 및 주민신고제 6대 구역.",
+    "seed": true
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [126.9790, 37.5670] },
+      "properties": {
+        "id": "np-001",
+        "category": "no_parking",
+        "kind": "금지구역",
+        "name": "소화전 5m 이내",
+        "address": "서울 중구 (예시 좌표)",
+        "source": "official",
+        "risk": {
+          "zone_type": "소화전 5m",
+          "fine": "8만원(승용)",
+          "citizen_report": true,
+          "safety_critical": true,
+          "law": "도로교통법 §32"
+        },
+        "note": "화재 대응 지연 위험. 주민신고제 대상. 절대 주차 금지."
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [126.9760, 37.5650] },
+      "properties": {
+        "id": "np-002",
+        "category": "no_parking",
+        "kind": "금지구역",
+        "name": "어린이보호구역(스쿨존)",
+        "address": "서울 중구 (예시 좌표)",
+        "source": "official",
+        "risk": {
+          "zone_type": "어린이보호구역",
+          "fine": "12만원(승용, 08~20시 가중)",
+          "citizen_report": true,
+          "safety_critical": true,
+          "law": "도로교통법 §32 / 어린이보호구역"
+        },
+        "note": "아동 보행 안전. 최고 과태료·가중처벌. 절대 주차 금지."
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [126.9805, 37.5658] },
+      "properties": {
+        "id": "np-003",
+        "category": "no_parking",
+        "kind": "금지구역",
+        "name": "횡단보도 위/연접",
+        "address": "서울 중구 (예시 좌표)",
+        "source": "official",
+        "risk": {
+          "zone_type": "횡단보도",
+          "fine": "4~5만원(승용)",
+          "citizen_report": true,
+          "safety_critical": true,
+          "law": "도로교통법 §32"
+        },
+        "note": "보행자 시야·통행 방해. 주민신고제 대상. 절대 주차 금지."
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [126.9748, 37.5678] },
+      "properties": {
+        "id": "np-004",
+        "category": "no_parking",
+        "kind": "금지구역",
+        "name": "버스정류소 10m 이내",
+        "address": "서울 중구 (예시 좌표)",
+        "source": "official",
+        "risk": {
+          "zone_type": "버스정류소 10m",
+          "fine": "4~5만원(승용)",
+          "citizen_report": true,
+          "safety_critical": true,
+          "law": "도로교통법 §32"
+        },
+        "note": "대중교통·교통약자 승하차 방해. 주민신고제 대상. 절대 주차 금지."
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [126.9730, 37.5645] },
+      "properties": {
+        "id": "np-005",
+        "category": "no_parking",
+        "kind": "금지구역",
+        "name": "교차로 모퉁이 5m 이내",
+        "address": "서울 중구 (예시 좌표)",
+        "source": "official",
+        "risk": {
+          "zone_type": "교차로 모퉁이 5m",
+          "fine": "4~5만원(승용)",
+          "citizen_report": true,
+          "safety_critical": true,
+          "law": "도로교통법 §32"
+        },
+        "note": "교차로 시야 확보·회전 동선. 절대 주차 금지."
+      }
+    }
+  ]
+}

@@ -1,0 +1,182 @@
+{
+  "type": "FeatureCollection",
+  "meta": {
+    "layer": "legal_free",
+    "note": "합법 무료주차 시드(예시). 프로덕션에서는 scripts/ingest.mjs 로 data.go.kr 15012896 등에서 인제스트.",
+    "seed": true
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [126.9769, 37.5665] },
+      "properties": {
+        "id": "seed-001",
+        "category": "legal_free",
+        "kind": "공영",
+        "free_type": "상시무료",
+        "name": "예시 하천변 공영주차장",
+        "address": "서울 중구 (예시 좌표)",
+        "num_spaces": 40,
+        "managing_org": "중구시설관리공단",
+        "source": "official",
+        "source_dataset": "15012896",
+        "verify": { "status": "verified", "check_date": "2026-06-01", "confidence": 0.9 },
+        "free_rules": [
+          { "day_type": "전일", "fee_type": "상시무료" }
+        ],
+        "note": "24시간 상시 무료 (예시)"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [127.0286, 37.4979] },
+      "properties": {
+        "id": "seed-002",
+        "category": "legal_free",
+        "kind": "공영",
+        "free_type": "시간제무료",
+        "name": "예시 구청 주차장 (평일 야간·주말 무료)",
+        "address": "서울 강남구 (예시 좌표)",
+        "num_spaces": 120,
+        "managing_org": "강남구청",
+        "source": "official",
+        "source_dataset": "15077522",
+        "verify": { "status": "verified", "check_date": "2026-06-10", "confidence": 0.85 },
+        "free_rules": [
+          { "day_type": "평일", "start": "09:00", "end": "18:00", "fee_type": "유료", "fee_info": "30분 1200원" },
+          { "day_type": "평일", "start": "18:00", "end": "09:00", "fee_type": "시간대무료" },
+          { "day_type": "주말", "fee_type": "시간대무료" }
+        ],
+        "note": "관공서 개방: 평일 18시 이후 + 주말·공휴일 종일 무료 (예시)"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [126.9245, 37.5563] },
+      "properties": {
+        "id": "seed-003",
+        "category": "legal_free",
+        "kind": "공영",
+        "free_type": "시간제무료",
+        "name": "예시 노상 공영주차장 (최초 30분 무료)",
+        "address": "서울 마포구 (예시 좌표)",
+        "num_spaces": 18,
+        "managing_org": "마포구시설관리공단",
+        "source": "official",
+        "source_dataset": "15051958",
+        "verify": { "status": "user", "check_date": "2026-06-28", "confidence": 0.6 },
+        "free_rules": [
+          { "day_type": "전일", "fee_type": "최초N분무료", "first_free_minutes": 30, "fee_info": "이후 5분당 200원" }
+        ],
+        "note": "최초 30분 무료 (예시)"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [127.0473, 37.5172] },
+      "properties": {
+        "id": "seed-004",
+        "category": "legal_free",
+        "kind": "민영",
+        "free_type": "민간개방",
+        "name": "예시 대형마트 (2시간 무료)",
+        "address": "서울 강남구 (예시 좌표)",
+        "num_spaces": 300,
+        "managing_org": "○○마트",
+        "source": "crowd",
+        "verify": { "status": "user", "check_date": "2026-07-01", "confidence": 0.7 },
+        "free_rules": [
+          { "day_type": "전일", "fee_type": "최초N분무료", "first_free_minutes": 120, "fee_info": "구매 무관 최초 2시간 무료, 이후 10분당 1000원" }
+        ],
+        "note": "민간 자발적 개방, 최초 120분 무료 (예시)"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [126.9016, 37.5299] },
+      "properties": {
+        "id": "seed-005",
+        "category": "legal_free",
+        "kind": "거주자우선",
+        "free_type": "공영개방",
+        "name": "예시 거주자우선 야간개방 구간",
+        "address": "서울 영등포구 (예시 좌표)",
+        "num_spaces": 12,
+        "managing_org": "영등포구",
+        "source": "official",
+        "source_dataset": "15021105",
+        "verify": { "status": "stale", "check_date": "2026-03-15", "confidence": 0.4 },
+        "free_rules": [
+          { "day_type": "평일", "start": "19:00", "end": "08:00", "fee_type": "시간대무료" },
+          { "day_type": "주말", "fee_type": "시간대무료" }
+        ],
+        "note": "거주자우선 유휴면 야간·주말 개방 (정책 변동 잦음, 재검증 필요 예시)"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [126.9895, 37.5509] },
+      "properties": {
+        "id": "seed-006",
+        "category": "legal_free",
+        "kind": "공영",
+        "free_type": "시간제무료",
+        "name": "예시 근린공원 주차장 (명절 무료개방)",
+        "address": "서울 용산구 (예시 좌표)",
+        "num_spaces": 60,
+        "managing_org": "용산구",
+        "source": "official",
+        "source_dataset": "15099790",
+        "verify": { "status": "verified", "check_date": "2026-06-20", "confidence": 0.8 },
+        "free_rules": [
+          { "day_type": "평일", "start": "06:00", "end": "22:00", "fee_type": "유료", "fee_info": "30분 600원" },
+          { "day_type": "공휴일", "fee_type": "시간대무료" }
+        ],
+        "note": "명절·공휴일 무료개방 (예시)"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [129.0756, 35.1796] },
+      "properties": {
+        "id": "seed-101",
+        "category": "legal_free",
+        "kind": "공영",
+        "free_type": "상시무료",
+        "name": "예시 부산 해안 공영주차장",
+        "address": "부산 중구 (예시 좌표)",
+        "num_spaces": 50,
+        "managing_org": "부산 중구",
+        "source": "official",
+        "source_dataset": "15012896",
+        "verify": { "status": "verified", "check_date": "2026-05-30", "confidence": 0.85 },
+        "free_rules": [
+          { "day_type": "전일", "fee_type": "상시무료" }
+        ],
+        "note": "전국 커버리지 예시 (부산)"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [127.3845, 36.3504] },
+      "properties": {
+        "id": "seed-102",
+        "category": "legal_free",
+        "kind": "부설",
+        "free_type": "공영개방",
+        "name": "예시 대전 공공기관 부설주차장 개방",
+        "address": "대전 서구 (예시 좌표)",
+        "num_spaces": 80,
+        "managing_org": "대전 서구",
+        "source": "official",
+        "source_dataset": "15108762",
+        "verify": { "status": "verified", "check_date": "2026-06-05", "confidence": 0.8 },
+        "free_rules": [
+          { "day_type": "평일", "start": "18:00", "end": "08:00", "fee_type": "시간대무료" },
+          { "day_type": "주말", "fee_type": "시간대무료" }
+        ],
+        "note": "부설주차장 개방·공유 (예시, 대구/대전형)"
+      }
+    }
+  ]
+}

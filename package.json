@@ -1,0 +1,13 @@
+{
+  "name": "pfree",
+  "version": "0.1.0",
+  "description": "전국 무료주차맵 — 합법 무료주차 찾기 + 과태료 위험구역 경고",
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/serve.mjs",
+    "test": "node --test",
+    "ingest": "node scripts/ingest.mjs"
+  },
+  "//": "런타임 의존성 없음 — Leaflet 1.9.4 / leaflet.markercluster 1.5.3 은 vendor/ 에 포함(오프라인). npm install 없이 npm run dev 로 실행.",
+  "license": "MIT"
+}

@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>전국 무료주차맵 (MVP)</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🅿️%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="./vendor/leaflet/leaflet.css" />
+  <link rel="stylesheet" href="./vendor/leaflet.markercluster/MarkerCluster.css" />
+  <link rel="stylesheet" href="./vendor/leaflet.markercluster/MarkerCluster.Default.css" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header id="topbar">
+    <div class="brand">🅿️ 전국 무료주차맵 <span class="tag">MVP</span></div>
+    <div id="disclaimer">
+      ⚠️ 무료·합법 여부는 시간·정책에 따라 변할 수 있습니다. 최종 확인은 현장 표지판 기준, <b>주차 책임은 본인</b>에게 있습니다.
+    </div>
+  </header>
+
+  <div id="app">
+    <aside id="panel">
+      <section class="ctl">
+        <h2>레이어</h2>
+        <label class="chk"><input type="checkbox" id="lyr-free" checked> <span class="dot free"></span> 합법 무료</label>
+        <label class="chk"><input type="checkbox" id="lyr-gray"> <span class="dot gray"></span> 단속 뜸한 곳(불법·정보)</label>
+        <label class="chk"><input type="checkbox" id="lyr-np" checked> <span class="dot warning"></span> 주차금지 경고</label>
+      </section>
+
+      <section class="ctl">
+        <h2>무료 유형</h2>
+        <label class="chk"><input type="checkbox" class="ft" value="상시무료" checked> 상시무료</label>
+        <label class="chk"><input type="checkbox" class="ft" value="시간제무료" checked> 시간제무료</label>
+        <label class="chk"><input type="checkbox" class="ft" value="공영개방" checked> 공영개방</label>
+        <label class="chk"><input type="checkbox" class="ft" value="민간개방" checked> 민간개방</label>
+      </section>
+
+      <section class="ctl">
+        <h2>기준 시각 <small>(“지금 무료냐?” 판정)</small></h2>
+        <label class="chk"><input type="radio" name="tm" id="tm-now" checked> 현재 시각</label>
+        <label class="chk"><input type="radio" name="tm" id="tm-sim"> 시각 지정</label>
+        <div id="sim-box">
+          <select id="sim-day">
+            <option value="평일">평일</option>
+            <option value="토요일">토요일</option>
+            <option value="일요일">일요일</option>
+            <option value="공휴일">공휴일</option>
+          </select>
+          <input type="range" id="sim-hour" min="0" max="23" value="21" />
+          <span id="sim-hour-lbl">21:00</span>
+        </div>
+        <label class="chk only-free"><input type="checkbox" id="only-free"> 지금 무료인 곳만</label>
+      </section>
+
+      <section class="ctl legend">
+        <h2>범례</h2>
+        <div><span class="dot free"></span> 지금 무료</div>
+        <div><span class="dot partial"></span> 조건부 무료(최초 N분 등)</div>
+        <div><span class="dot paid"></span> 지금 유료 / 무료시간대 아님</div>
+        <div><span class="dot gray"></span> 단속 뜸함(불법·본인책임)</div>
+        <div><span class="dot warning"></span> 주정차 절대금지(경고)</div>
+      </section>
+
+      <section class="ctl">
+        <div id="stats"></div>
+        <p class="src">데이터: 예시 시드. 실제는 <code>공공데이터포털 15012896 · 15077522 · 서울 OA-13122</code> 등에서 인제스트(<code>scripts/ingest.mjs</code>).</p>
+      </section>
+    </aside>
+
+    <div id="map"></div>
+  </div>
+
+  <script src="./vendor/leaflet/leaflet.js"></script>
+  <script src="./vendor/leaflet.markercluster/leaflet.markercluster.js"></script>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

@@ -1,0 +1,51 @@
+{
+  "type": "FeatureCollection",
+  "meta": {
+    "layer": "gray_zone",
+    "note": "단속이 뜸한 것으로 제보된 '불법' 주정차 구역. 추천이 아니라 정직한 위험 정보로만 제공한다. 안전 치명 구역(소화전/스쿨존/횡단보도/소방시설/버스정류소/교차로)은 이 레이어에 절대 넣지 않는다 — 그런 위치는 no_parking(경고 전용)으로만 처리.",
+    "policy": "safety_critical 위치는 gray_zone 금지. 모든 항목에 주민신고제·과태료·본인책임 고지 필수.",
+    "seed": true
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [126.9142, 37.5601] },
+      "properties": {
+        "id": "gray-001",
+        "category": "gray_zone",
+        "kind": "회색지대",
+        "name": "예시 주택가 이면도로 (야간 단속 뜸함 제보)",
+        "address": "서울 마포구 (예시 좌표)",
+        "source": "crowd",
+        "verify": { "status": "user", "check_date": "2026-07-02", "confidence": 0.45 },
+        "risk": {
+          "zone_type": "이면도로 주정차금지",
+          "fine": "4만원(승용)",
+          "citizen_report": true,
+          "safety_critical": false
+        },
+        "note": "제보: 평일 야간 단속이 드묾. 그러나 불법 주정차이며 주민신고 시 즉시 과태료. 골목 통행/소방 동선 방해 금지. 본인 책임."
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [127.0359, 37.5045] },
+      "properties": {
+        "id": "gray-002",
+        "category": "gray_zone",
+        "kind": "회색지대",
+        "name": "예시 상가 뒤 공터 인접 노변 (주말 단속 뜸함 제보)",
+        "address": "서울 강남구 (예시 좌표)",
+        "source": "crowd",
+        "verify": { "status": "disputed", "check_date": "2026-06-25", "confidence": 0.3 },
+        "risk": {
+          "zone_type": "노변 주정차금지",
+          "fine": "4만원(승용)",
+          "citizen_report": true,
+          "safety_critical": false
+        },
+        "note": "제보 상충(‘요즘 단속 늘었다’ 반대 제보 있음). 불법 구역이며 본인 책임. 재검증 필요."
+      }
+    }
+  ]
+}
