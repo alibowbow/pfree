@@ -15,7 +15,10 @@
     <button id="panel-toggle" class="icon-btn" title="메뉴" aria-label="메뉴 접기/펼치기">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
     </button>
-    <div class="brand"><span class="logo">P</span> 무료주차맵 <span class="tag">MVP</span></div>
+    <div class="brand">
+      <span class="logo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1.6C7.9 1.6 4.6 4.9 4.6 9c0 5.5 7.4 13.4 7.4 13.4S19.4 14.5 19.4 9c0-4.1-3.3-7.4-7.4-7.4z" fill="currentColor"/><text x="12" y="12.4" font-size="9" font-weight="700" text-anchor="middle" fill="#fff" font-family="'Pretendard Variable',sans-serif">P</text></svg></span>
+      무료주차맵 <span class="tag">MVP</span>
+    </div>
     <div class="spacer"></div>
     <button id="theme-toggle" class="icon-btn" title="라이트/다크" aria-label="라이트/다크 전환">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
@@ -30,7 +33,13 @@
 
   <div id="app">
     <aside id="panel">
-      <div id="stats"></div>
+      <div id="stats">
+        <svg class="hero-deco" viewBox="0 0 200 150" fill="none" stroke="currentColor" aria-hidden="true">
+          <g stroke-width="1.4"><circle cx="154" cy="38" r="15"/><circle cx="154" cy="38" r="33"/><circle cx="154" cy="38" r="53"/><circle cx="154" cy="38" r="75"/></g>
+          <circle cx="154" cy="38" r="3.6" fill="currentColor" stroke="none"/>
+        </svg>
+        <div id="stats-content"></div>
+      </div>
 
       <details class="ctl mine" open>
         <summary>내 제보</summary>

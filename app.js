@@ -36,7 +36,7 @@ const els = {
   fts: [...document.querySelectorAll('.ft')],
   tmNow: $('tm-now'), tmSim: $('tm-sim'), simBox: $('sim-box'),
   simDay: $('sim-day'), simHour: $('sim-hour'), simHourLbl: $('sim-hour-lbl'),
-  onlyFree: $('only-free'), stats: $('stats'), mineCount: $('mine-count'), near: $('near'),
+  onlyFree: $('only-free'), statsContent: $('stats-content'), mineCount: $('mine-count'), near: $('near'),
 };
 
 let userLoc = null;   // {lat,lng}
@@ -72,15 +72,30 @@ function refDate() {
 }
 const toISO = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-// ── 마커 ────────────────────────────────────────────────────────────────────
-// 절제된 팔레트(양쪽 테마 지도에서 모두 안정적). 액센트 계열로 통일.
+// ── 마커 (커스텀 SVG 픽토그램) ───────────────────────────────────────────────
+// 합법무료 = 'P' 핀, 단속뜸 = 주의 핀, 주차금지 = 주차금지 표지판(P+사선).
 const MARKER_COLOR = { free: '#2f7355', partial: '#a9741f', paid: '#a8a49b', gray: '#94781f', warning: '#a5443a', unknown: '#a8a49b' };
+const FONT_ATTR = "font-family='Pretendard Variable',-apple-system,sans-serif";
+
+function markerHtml(state, isUser) {
+  const badge = isUser ? `<circle cx='23' cy='6.5' r='4' fill='#3b6cc7' stroke='#fff' stroke-width='1.6'/>` : '';
+  if (state === 'warning') { // 주차금지 표지판: 빨간 원 + P + 사선
+    return `<div class="mk"><svg width="28" height="28" viewBox="0 0 28 28" ${FONT_ATTR}>` +
+      `<circle cx="14" cy="14" r="11.4" fill="${MARKER_COLOR.warning}" stroke="#fff" stroke-width="2.4"/>` +
+      `<text x="14" y="18.6" font-size="13" font-weight="700" text-anchor="middle" fill="#fff">P</text>` +
+      `<line x1="6.6" y1="6.6" x2="21.4" y2="21.4" stroke="#fff" stroke-width="2.3"/>${badge}</svg></div>`;
+  }
+  const color = MARKER_COLOR[state] || MARKER_COLOR.unknown;
+  const glyph = state === 'gray' ? '!' : 'P';
+  return `<div class="mk"><svg width="28" height="36" viewBox="0 0 28 36" ${FONT_ATTR}>` +
+    `<path d="M14 1.5C7.4 1.5 2 6.9 2 13.5c0 8.7 12 21 12 21s12-12.3 12-21C26 6.9 20.6 1.5 14 1.5z" fill="${color}" stroke="#fff" stroke-width="2.4"/>` +
+    `<text x="14" y="18.8" font-size="14" font-weight="700" text-anchor="middle" fill="#fff">${glyph}</text>${badge}</svg></div>`;
+}
 function pinIcon(state, isUser) {
   const warn = state === 'warning';
   return L.divIcon({
-    className: '',
-    html: `<div class="pin ${warn ? 'warning' : ''}" style="background:${MARKER_COLOR[state] || MARKER_COLOR.unknown}${isUser ? ';outline:1.5px solid #3b6cc7;outline-offset:1.5px' : ''}"></div>`,
-    iconSize: [18, 18], iconAnchor: warn ? [9, 9] : [9, 17], popupAnchor: [0, warn ? -11 : -19],
+    className: '', html: markerHtml(state, isUser),
+    iconSize: warn ? [28, 28] : [28, 36], iconAnchor: warn ? [14, 14] : [14, 35], popupAnchor: [0, warn ? -15 : -33],
   });
 }
 
@@ -162,7 +177,7 @@ function render() {
   }
 
   const t = now.toLocaleString('ko-KR', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
-  els.stats.innerHTML =
+  els.statsContent.innerHTML =
     `<div class="now-num ${nowFree ? 'has' : ''}"><span class="mono-num">${nowFree}</span><small>곳 지금 무료</small></div>` +
     `<div class="now-label">합법 무료 ${count.legal_free}곳 표시 중</div>` +
     `<div class="breakdown">` +
@@ -182,7 +197,13 @@ function render() {
 // 내 주변 무료 리스트 (현위치 기준 거리정렬)
 function renderNearby() {
   if (!userLoc) {
-    els.near.innerHTML = `<div class="near-empty">현위치를 켜면 가까운 <b>지금 무료</b> 주차를 거리순으로 보여줍니다.</div><button class="btn block" id="near-locate" style="margin-top:10px">현위치 켜기</button>`;
+    els.near.innerHTML =
+      `<div class="near-illust"><svg viewBox="0 0 96 74" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round">` +
+        `<ellipse cx="48" cy="60" rx="27" ry="6.5" opacity=".22"/><ellipse cx="48" cy="60" rx="15" ry="3.6" opacity=".4"/>` +
+        `<path d="M48 12c-8.6 0-15.5 6.9-15.5 15.5C32.5 39 48 55 48 55s15.5-16 15.5-27.5C63.5 18.9 56.6 12 48 12z"/>` +
+        `<circle cx="48" cy="27.5" r="5.6" fill="currentColor" stroke="none"/></svg></div>` +
+      `<div class="near-empty">현위치를 켜면 가까운 <b>지금 무료</b> 주차를 거리순으로 보여줍니다.</div>` +
+      `<button class="btn block" id="near-locate" style="margin-top:12px">현위치 켜기</button>`;
     const b = $('near-locate'); if (b) b.addEventListener('click', locate);
     return;
   }
@@ -484,6 +505,6 @@ async function load() {
 }
 
 load().catch((e) => {
-  $('stats').innerHTML = `<b style="color:var(--warning)">데이터 로드 실패</b><br>정적 서버로 실행: <code>npm run dev</code> 또는 공유 서버 <code>npm run server</code>`;
+  $('stats-content').innerHTML = `<b style="color:var(--s-warn)">데이터 로드 실패</b><br>정적 서버로 실행: <code>npm run dev</code> 또는 공유 서버 <code>npm run server</code>`;
   console.error(e);
 });

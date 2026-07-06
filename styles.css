@@ -84,11 +84,8 @@ button { font-family: inherit; color: inherit; }
   border-bottom: 1px solid var(--line); z-index: 500;
 }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 650; font-size: 15.5px; letter-spacing: -0.01em; white-space: nowrap; }
-.brand .logo {
-  display: grid; place-items: center; width: 22px; height: 22px; border-radius: 5px;
-  background: var(--accent); color: #fff; font-weight: 700; font-size: 12px;
-}
-:root[data-theme='dark'] .brand .logo { color: #16211c; }
+.brand .logo { display: inline-flex; width: 21px; height: 21px; color: var(--accent); }
+.brand .logo svg { width: 21px; height: 21px; filter: drop-shadow(0 1px 1px rgba(28, 26, 22, .18)); }
 .brand .tag { font-size: 9.5px; font-weight: 600; letter-spacing: 0.08em; color: var(--ink-3); border: 1px solid var(--line-2); border-radius: 4px; padding: 2px 5px; }
 #topbar .spacer { flex: 1; }
 .icon-btn { display: grid; place-items: center; width: 34px; height: 34px; border-radius: var(--r-sm); background: transparent; border: none; color: var(--ink-2); cursor: pointer; transition: background .16s, color .16s; }
@@ -112,7 +109,10 @@ body.panel-collapsed #panel { display: none; }
 #map { flex: 1 1 auto; min-width: 0; background: var(--surface-2); }
 
 /* ── hero stat ───────────────────────────────────────────────────────────── */
-#stats { padding: 20px 18px 18px; border-bottom: 1px solid var(--line); }
+#stats { position: relative; overflow: hidden; padding: 20px 18px 18px; border-bottom: 1px solid var(--line); }
+.hero-deco { position: absolute; right: -18px; top: -14px; width: 168px; height: 126px; color: var(--accent); opacity: .13; pointer-events: none; }
+:root[data-theme='dark'] .hero-deco { opacity: .16; }
+#stats-content { position: relative; }
 #stats .now-num { font-size: 34px; font-weight: 600; line-height: 1; letter-spacing: -0.035em; color: var(--ink); }
 #stats .now-num.has { color: var(--accent); }
 #stats .now-num small { font-size: 13px; font-weight: 500; color: var(--ink-2); margin-left: 7px; letter-spacing: -0.01em; }
@@ -157,7 +157,9 @@ body.panel-collapsed #panel { display: none; }
 .legend .lg { display: flex; align-items: center; gap: 10px; font-size: 12.5px; padding: 5px 0; color: var(--ink); }
 
 /* nearby */
-.near-empty { font-size: 12.5px; color: var(--ink-2); line-height: 1.6; }
+.near-illust { display: flex; justify-content: center; color: var(--accent); margin: 2px 0 12px; }
+.near-illust svg { width: 92px; height: 71px; }
+.near-empty { font-size: 12.5px; color: var(--ink-2); line-height: 1.6; text-align: center; }
 .near-list { display: flex; flex-direction: column; margin: -4px 0; }
 .near-item { display: flex; align-items: center; gap: 11px; padding: 11px 0; cursor: pointer; border-top: 1px solid var(--line); }
 .near-item:first-child { border-top: none; }
@@ -213,8 +215,8 @@ input[type=range]::-moz-range-thumb { width: 13px; height: 13px; border-radius: 
 :root[data-theme='dark'] .me-dot { border-color: #1c1b19; }
 
 /* ── markers / cluster ───────────────────────────────────────────────────── */
-.pin { width: 18px; height: 18px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); border: 2px solid var(--surface); box-shadow: 0 1px 3px rgba(28,26,22,.32); }
-.pin.warning { border-radius: 4px; transform: none; }
+.mk svg { display: block; filter: drop-shadow(0 2px 3px rgba(28, 26, 22, .34)); }
+:root[data-theme='dark'] .mk svg { filter: drop-shadow(0 2px 4px rgba(0, 0, 0, .55)); }
 .marker-cluster { background: transparent !important; }
 .marker-cluster div {
   width: 32px !important; height: 32px !important; margin: 4px 0 0 4px !important;
@@ -295,5 +297,6 @@ input[type=range]::-moz-range-thumb { width: 13px; height: 13px; border-radius: 
   #locate { bottom: 16px; }
 }
 
-/* dark map tiles: subtle luminance trim */
-:root[data-theme='dark'] .leaflet-tile { filter: brightness(.82) contrast(1.06) saturate(.92); }
+/* map tiles: tone to match paper/ink palette */
+.leaflet-tile { filter: saturate(.82) brightness(1.02) sepia(.10) hue-rotate(-6deg); }
+:root[data-theme='dark'] .leaflet-tile { filter: brightness(.8) contrast(1.05) saturate(.78) sepia(.12) hue-rotate(-8deg); }
