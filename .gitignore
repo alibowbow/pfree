@@ -2,8 +2,7 @@ node_modules/
 .DS_Store
 *.log
 .env
-# 인제스트 산출물(대용량, 재생성 가능) — 시드(*.seed.json)는 커밋
-/data/free-parking.json
+# 인제스트 산출물 — data/free-parking.json 은 실데이터라 커밋함(기본 로드)
 /data/*.ingested.json
 # 공유 서버 SQLite DB (런타임 생성, 시드에서 재구성)
 /data/spots.db

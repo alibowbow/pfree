@@ -40,7 +40,6 @@ test('GET /api/spots bbox 필터', async () => {
 });
 
 test('POST → 공유 저장 후 다른 조회에서 보임(멀티플레이)', async () => {
-  const before = (await fetch(`${BASE}/api/spots`).then((r) => r.json())).features.length;
   const r = await fetch(`${BASE}/api/spots`, {
     method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ name: '공유 테스트', category: 'legal_free', free_type: '상시무료', free_rules: [{ day_type: '전일', fee_type: '상시무료' }], ...seoul }),
@@ -49,9 +48,9 @@ test('POST → 공유 저장 후 다른 조회에서 보임(멀티플레이)', a
   const { feature } = await r.json();
   assert.ok(feature.properties.id);
   assert.equal(feature.properties.source, 'crowd');
-  const after = (await fetch(`${BASE}/api/spots`).then((r) => r.json())).features.length;
-  assert.equal(after, before + 1);
-  return feature.properties.id;
+  // 다른 조회(좁은 bbox)에서 방금 올린 제보가 보여야 함 — 전체 개수는 서버 LIMIT 영향받으므로 존재 여부로 검증
+  const box = await fetch(`${BASE}/api/spots?bbox=${seoul.lng - 0.01},${seoul.lat - 0.01},${seoul.lng + 0.01},${seoul.lat + 0.01}`).then((x) => x.json());
+  assert.ok(box.features.some((f) => f.properties.id === feature.properties.id), '올린 제보가 bbox 조회에 나와야 함');
 });
 
 test('안전 가드 서버측 강제 — gray_zone 확인 없이 400', async () => {

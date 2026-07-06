@@ -67,12 +67,14 @@ function migrateSeeds() {
   const real = join(ROOT, 'data', 'free-parking.json');
   const legalFile = existsSync(real) ? real : join(ROOT, 'data', 'free-parking.seed.json');
   let n = 0;
+  db.exec('BEGIN'); // 7천+ 건 대량 삽입은 단일 트랜잭션으로(개별 커밋 fsync 방지)
   for (const file of [legalFile, join(ROOT, 'data', 'gray-zones.seed.json'), join(ROOT, 'data', 'no-parking.seed.json')]) {
     try {
       const fc = JSON.parse(rfs(file, 'utf8'));
       for (const f of fc.features || []) { saveFeature(f); n++; }
     } catch (e) { console.warn('seed skip', file, e.message); }
   }
+  db.exec('COMMIT');
   console.log(`▶ 초기 데이터 ${n}곳 DB 이관 (합법무료 소스: ${legalFile.endsWith('free-parking.json') ? '실데이터' : '시드'})`);
 }
 migrateSeeds();
