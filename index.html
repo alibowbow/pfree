@@ -124,7 +124,13 @@
       <details class="ctl">
         <summary><span class="ico"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="8" cy="3.6" rx="5.2" ry="2.1"/><path d="M2.8 3.6v8.8c0 1.2 2.3 2.1 5.2 2.1s5.2-.9 5.2-2.1V3.6"/><path d="M2.8 8c0 1.2 2.3 2.1 5.2 2.1s5.2-.9 5.2-2.1"/></svg></span>데이터 출처</summary>
         <div class="ctl-body">
-          <p class="src">예시 시드. 실제는 <code>공공데이터포털 15012896 · 15077522 · 서울 OA-13122</code> 등에서 인제스트(<code>scripts/ingest.mjs</code>).</p>
+          <p class="src">전국주차장정보표준데이터(<code>data.go.kr 15012896</code>) CSV를 받아 아래로 불러오면 전국 무료주차가 바로 표시됩니다. PC·터미널 불필요, 폰에서도 동작.</p>
+          <button id="btn-gov" class="btn block" style="margin-top:10px">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3m0 0L8 7m4-4l4 4M4 21h16"/></svg>
+            공공데이터 CSV 불러오기
+          </button>
+          <input type="file" id="gov-file" accept=".csv,.json,.txt" hidden />
+          <div id="gov-status" class="muted-s"></div>
         </div>
       </details>
 

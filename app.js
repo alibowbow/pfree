@@ -5,8 +5,10 @@ import {
   loadUserSpots, saveUserSpots,
 } from './lib/userSpots.js';
 import { detectServer, isServer, apiLoad, apiCreate, apiUpdate, apiDelete } from './lib/backend.js';
+import { csvToFeatures, rowsToFeatures } from './lib/ingest.js';
 
 const HOLIDAYS = holidaySet();
+let govFeatures = []; // 공공데이터 CSV로 불러온 전국 무료주차(세션 오버레이)
 
 // ── 지도 ────────────────────────────────────────────────────────────────────
 const map = L.map('map', { zoomControl: true, zoomSnap: 0.5 }).setView([37.5665, 126.9769], 12);
@@ -146,8 +148,15 @@ function popupHtml(p, ev) {
 }
 
 // ── 렌더 ────────────────────────────────────────────────────────────────────
+// 서버/로컬 데이터 + 공공데이터 오버레이. 공공데이터가 있으면 합법무료(공식)는 그것으로 대체,
+// 사용자 제보(crowd)·단속뜸·주차금지 레이어는 유지.
+function allFeatures() {
+  if (!govFeatures.length) return store.all;
+  const kept = store.all.filter((f) => !(f.properties.category === 'legal_free' && f.properties.source === 'official'));
+  return kept.concat(govFeatures);
+}
 function layerFeatures(cat) {
-  return store.all.filter((f) => f.properties.category === cat);
+  return allFeatures().filter((f) => f.properties.category === cat);
 }
 
 let freeNowFeatures = []; // 내 주변 리스트용 (지금 무료인 합법 스팟)
@@ -451,6 +460,41 @@ try { const savedTheme = localStorage.getItem('pfree.theme'); if (savedTheme) ap
 // 안내바 닫기
 try { if (localStorage.getItem('pfree.notice') === 'off') $('notice').classList.add('hidden'); } catch {}
 $('notice-close').addEventListener('click', () => { $('notice').classList.add('hidden'); try { localStorage.setItem('pfree.notice', 'off'); } catch {} });
+
+// 공공데이터 CSV/JSON을 브라우저에서 직접 불러오기 (data.go.kr 15012896 표준데이터)
+async function loadGovFile(file) {
+  const status = $('gov-status');
+  status.textContent = '불러오는 중…';
+  try {
+    const buf = await file.arrayBuffer();
+    let text = new TextDecoder('utf-8').decode(buf);
+    let res;
+    if (file.name.toLowerCase().endsWith('.json')) {
+      const json = JSON.parse(text);
+      const items = Array.isArray(json) ? json : (json.data || json.records || json.features || []);
+      const rows = items.map((it) => (it.properties ? it.properties : it));
+      res = rowsToFeatures(rows.length ? Object.keys(rows[0]) : [], rows);
+    } else {
+      // 한글 헤더가 깨지면 EUC-KR/CP949로 재디코딩
+      if (!/주차장|위도/.test(text.slice(0, 4000))) { try { text = new TextDecoder('euc-kr').decode(buf); } catch {} }
+      res = csvToFeatures(text);
+    }
+    if (!res.features.length) {
+      status.textContent = '무료 주차장을 찾지 못했습니다. 전국주차장정보표준데이터(15012896) CSV/JSON이 맞는지 확인하세요.';
+      return;
+    }
+    govFeatures = res.features;
+    if (!els.lyrFree.checked) els.lyrFree.checked = true;
+    syncLayers(); render();
+    const b = L.latLngBounds(govFeatures.map((f) => [f.geometry.coordinates[1], f.geometry.coordinates[0]]));
+    if (b.isValid()) map.fitBounds(b, { padding: [30, 30] });
+    status.innerHTML = `<span class="mode server">전국 무료주차 ${res.features.length.toLocaleString()}곳 불러옴</span> · 이 세션 표시 (원본 ${res.stats.total.toLocaleString()}행)`;
+  } catch (e) {
+    status.textContent = '읽기 실패: ' + e.message;
+  }
+}
+$('btn-gov').addEventListener('click', () => $('gov-file').click());
+$('gov-file').addEventListener('change', (e) => { if (e.target.files[0]) loadGovFile(e.target.files[0]); e.target.value = ''; });
 
 $('btn-add').addEventListener('click', () => openEditor(null));
 $('btn-export').addEventListener('click', exportUser);
