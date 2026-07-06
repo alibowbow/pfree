@@ -68,7 +68,7 @@ function migrateSeeds() {
   const legalFile = existsSync(real) ? real : join(ROOT, 'data', 'free-parking.seed.json');
   let n = 0;
   db.exec('BEGIN'); // 7천+ 건 대량 삽입은 단일 트랜잭션으로(개별 커밋 fsync 방지)
-  for (const file of [legalFile, join(ROOT, 'data', 'gray-zones.seed.json'), join(ROOT, 'data', 'no-parking.seed.json')]) {
+  for (const file of [legalFile, join(ROOT, 'data', 'community.seed.json'), join(ROOT, 'data', 'gray-zones.seed.json'), join(ROOT, 'data', 'no-parking.seed.json')]) {
     try {
       const fc = JSON.parse(rfs(file, 'utf8'));
       for (const f of fc.features || []) { saveFeature(f); n++; }

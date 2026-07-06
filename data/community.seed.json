@@ -1,0 +1,29 @@
+{
+  "type": "FeatureCollection",
+  "meta": {
+    "layer": "community",
+    "note": "커뮤니티/직접 추가한 실제 무료주차 (공식 표준데이터에 없는 곳). source=crowd, 편집 가능."
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": { "type": "Point", "coordinates": [129.1850, 35.3200] },
+      "properties": {
+        "id": "comm-sodubang-park",
+        "category": "legal_free",
+        "kind": "공영",
+        "free_type": "상시무료",
+        "name": "소두방공원 무료주차장",
+        "address": "부산 기장군 정관읍 정관중앙로 100 (방곡리 442)",
+        "managing_org": "기장군도시관리공단",
+        "source": "crowd",
+        "editable": true,
+        "verify": { "status": "user", "check_date": null, "confidence": 0.4 },
+        "free_rules": [
+          { "day_type": "전일", "fee_type": "상시무료" }
+        ],
+        "note": "정관 소두방공원(정관박물관·도서관·축구장) 주차장. 좌표는 주소 기반 추정 — 실제 위치와 다르면 마커를 드래그해 조정하세요."
+      }
+    }
+  ]
+}

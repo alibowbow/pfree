@@ -228,6 +228,13 @@ input[type=range]::-moz-range-thumb { width: 13px; height: 13px; border-radius: 
 #locate:hover { color: var(--ink); }
 #locate.active { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
 #locate svg { width: 19px; height: 19px; }
+#zoom-hint {
+  position: absolute; top: 16px; left: 50%; transform: translateX(-50%); z-index: 600;
+  background: var(--surface); border: 1px solid var(--line-2); border-radius: 999px;
+  padding: 8px 16px; font-size: 12.5px; font-weight: 600; color: var(--ink-2);
+  box-shadow: var(--shadow-pop); pointer-events: none; white-space: nowrap;
+}
+#zoom-hint.hidden { display: none; }
 .me-dot { width: 14px; height: 14px; border-radius: 50%; background: #3b6cc7; border: 2.5px solid #fff; box-shadow: 0 0 0 4px rgba(59,108,199,.22); }
 :root[data-theme='dark'] .me-dot { border-color: #1c1b19; }
 

@@ -20,10 +20,16 @@ L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r
   attribution: '&copy; OpenStreetMap &copy; CARTO · 무료주차: 공공데이터/사용자 제보',
 }).addTo(map);
 
-const freeCluster = L.markerClusterGroup({ maxClusterRadius: 45, spiderfyOnMaxZoom: true });
+// 도시 줌 이상에서만 주차 마커 표시(전국 뷰가 숫자로 뒤덮이는 것 방지)
+const MIN_MARKER_ZOOM = 11;
+const freeCluster = L.markerClusterGroup({
+  maxClusterRadius: 70, spiderfyOnMaxZoom: true, showCoverageOnHover: false,
+  chunkedLoading: true, removeOutsideVisibleBounds: true,
+});
 const grayLayer = L.layerGroup();
 const npLayer = L.layerGroup();
 const layerObj = { legal_free: freeCluster, gray_zone: grayLayer, no_parking: npLayer };
+const freeVisible = () => els.lyrFree.checked && map.getZoom() >= MIN_MARKER_ZOOM;
 
 // store.all = 전체 스팟(공식 시드 + 사용자 제보). 서버 모드면 서버에서, 로컬 모드면 시드+localStorage.
 const store = { all: [] };
@@ -170,8 +176,10 @@ function render() {
   freeNowFeatures = [];
 
   for (const cat of ['legal_free', 'gray_zone', 'no_parking']) {
-    const on = { legal_free: els.lyrFree, gray_zone: els.lyrGray, no_parking: els.lyrNp }[cat].checked;
-    if (!on) continue;
+    const checked = { legal_free: els.lyrFree, gray_zone: els.lyrGray, no_parking: els.lyrNp }[cat].checked;
+    if (!checked) continue;
+    // 합법무료는 마커가 많아 도시 줌 이상에서만 그림(개수는 항상 집계)
+    const draw = cat === 'legal_free' ? (map.getZoom() >= MIN_MARKER_ZOOM) : true;
     for (const f of layerFeatures(cat)) {
       const p = f.properties;
       if (cat === 'legal_free' && p.free_type && !activeFts.has(p.free_type)) continue;
@@ -180,6 +188,7 @@ function render() {
       if (cat === 'legal_free' && isFreeNow) freeNowFeatures.push({ f, ev });
       if (cat === 'legal_free' && onlyFree && !isFreeNow) continue;
       count[cat]++; if (cat === 'legal_free' && isFreeNow) nowFree++;
+      if (!draw) continue;
       const [lng, lat] = f.geometry.coordinates;
       L.marker([lat, lng], { icon: pinIcon(ev.state, p.editable) }).bindPopup(popupHtml(p, ev)).addTo(layerObj[cat]);
     }
@@ -187,8 +196,8 @@ function render() {
 
   const t = now.toLocaleString('ko-KR', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
   els.statsContent.innerHTML =
-    `<div class="now-num ${nowFree ? 'has' : ''}"><span class="mono-num">${nowFree}</span><small>곳 지금 무료</small></div>` +
-    `<div class="now-label">합법 무료 ${count.legal_free}곳 표시 중</div>` +
+    `<div class="now-num ${nowFree ? 'has' : ''}"><span class="mono-num">${nowFree.toLocaleString()}</span><small>곳 지금 무료</small></div>` +
+    `<div class="now-label">합법 무료 ${count.legal_free.toLocaleString()}곳${freeVisible() ? '' : ' · 지도 확대 시 표시'}</div>` +
     `<div class="breakdown">` +
       `<span class="bk"><span class="dot gray"></span>단속뜸 <b>${count.gray_zone}</b></span>` +
       `<span class="bk"><span class="dot warning"></span>주차금지 <b>${count.no_parking}</b></span>` +
@@ -201,6 +210,7 @@ function render() {
   els.mineCount.innerHTML = `${mine ? `제보 ${mine}곳` : '아직 제보가 없습니다'}<br>${mode}`;
 
   renderNearby();
+  syncLayers();
 }
 
 // 내 주변 무료 리스트 (현위치 기준 거리정렬)
@@ -235,9 +245,11 @@ function renderNearby() {
 }
 
 function syncLayers() {
-  els.lyrFree.checked ? map.addLayer(freeCluster) : map.removeLayer(freeCluster);
+  freeVisible() ? map.addLayer(freeCluster) : map.removeLayer(freeCluster);
   els.lyrGray.checked ? map.addLayer(grayLayer) : map.removeLayer(grayLayer);
   els.lyrNp.checked ? map.addLayer(npLayer) : map.removeLayer(npLayer);
+  const hint = $('zoom-hint');
+  if (hint) hint.classList.toggle('hidden', !(els.lyrFree.checked && map.getZoom() < MIN_MARKER_ZOOM));
 }
 
 // ── 편집기 ──────────────────────────────────────────────────────────────────
@@ -517,6 +529,9 @@ document.querySelectorAll('.chip[data-preset]').forEach((b) => b.addEventListene
 // 지도 클릭 → 위치 지정 (편집기 열려 있을 때만)
 map.on('click', (e) => { if (editorOpen) setPending(e.latlng.lat, e.latlng.lng); });
 
+// 줌 변경 시 마커 표시 갱신 (도시 줌 이상에서만 그림). 서버 모드는 moveend가 처리.
+map.on('zoomend', () => { if (!isServer()) render(); else syncLayers(); });
+
 // 팝업 편집/삭제 버튼 (이벤트 위임)
 document.addEventListener('click', (e) => {
   const btn = e.target.closest('button[data-act]');
@@ -540,11 +555,12 @@ async function load() {
     // 로컬 모드: 실데이터(free-parking.json, ingest 산출물) 우선, 없으면 시드 + localStorage
     const getJson = (u) => fetch(u).then((r) => (r.ok ? r.json() : null)).catch(() => null);
     const free = (await getJson('./data/free-parking.json')) || (await getJson('./data/free-parking.seed.json')) || { features: [] };
-    const [gray, np] = await Promise.all([
+    const [community, gray, np] = await Promise.all([
+      getJson('./data/community.seed.json'),
       getJson('./data/gray-zones.seed.json'),
       getJson('./data/no-parking.seed.json'),
     ]);
-    store.all = [...(free.features || []), ...((gray || {}).features || []), ...((np || {}).features || []), ...loadUserSpots()];
+    store.all = [...(free.features || []), ...((community || {}).features || []), ...((gray || {}).features || []), ...((np || {}).features || []), ...loadUserSpots()];
   }
   syncLayers(); render();
 }
