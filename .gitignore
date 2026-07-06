@@ -5,3 +5,6 @@ node_modules/
 # 인제스트 산출물(대용량, 재생성 가능) — 시드(*.seed.json)는 커밋
 /data/free-parking.json
 /data/*.ingested.json
+# 공유 서버 SQLite DB (런타임 생성, 시드에서 재구성)
+/data/spots.db
+/data/spots.db-*

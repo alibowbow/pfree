@@ -9,24 +9,38 @@
 ## 빠른 실행
 
 ```bash
-npm run dev        # → http://localhost:8000
-# 또는
-python3 -m http.server 8000
+npm run server     # 🌐 공유 서버(멀티플레이) → http://localhost:8000  ★권장
+npm run dev        # 📴 로컬 전용(시드+localStorage) → http://localhost:8000
+npm test           # 유닛 테스트 (node --test, 27개)
 ```
 
-브라우저에서 열면 예시 시드 데이터로 지도가 뜬다. (모듈 import 때문에 `file://` 직접 열기는 안 되고 정적 서버 필요.)
+- **`npm run server`**: Node 내장 SQLite 백엔드 + REST API. 제보가 **공유 서버에 저장되어 모든 사용자에게 보인다**(진짜 크라우드소싱).
+- **`npm run dev`**: 백엔드 없이 시드 데이터 + `localStorage`. 앱은 서버 유무를 자동 감지해 두 모드를 오간다.
+- 모듈 import 때문에 `file://` 직접 열기는 안 되고 정적 서버 필요.
 
-```bash
-npm test           # 규칙 엔진 + 사용자 제보 유닛 테스트 (node --test, 22개)
-```
+## 공유 서버 (멀티플레이) — `npm run server`
+
+싱글플레이(localStorage) → 멀티플레이 각성. `scripts/server.mjs`가 Node **내장 `node:sqlite`**로 REST API를 연다(외부 계정·의존성 없음). 프런트(`lib/backend.js`)는 `GET /api/health`로 서버를 감지해 모드를 전환한다.
+
+| 메서드 | 엔드포인트 | 설명 |
+|---|---|---|
+| `GET` | `/api/health` | 모드·스팟 수 |
+| `GET` | `/api/spots?bbox=minLng,minLat,maxLng,maxLat&cat=` | **뷰포트 질의**(보는 만큼만) |
+| `POST` | `/api/spots` | 제보 생성 — 서버가 `buildFeature`로 검증(**안전가드 서버측 강제**) |
+| `PATCH` | `/api/spots/:id` | 수정 (editable 스팟만) |
+| `DELETE` | `/api/spots/:id` | 삭제 (공식 시드는 403) |
+
+- 최초 실행 시 시드 3파일을 DB(`data/spots.db`, gitignore)로 1회 이관.
+- 지도를 움직이면 새 bbox로 재조회(뷰포트 API — 전국 수만 곳으로 확장 대비).
+- **프로덕션 경로**: 이 스키마/엔드포인트를 그대로 **Supabase(PostGIS + Auth + RLS)**로 승격 → 카카오 로그인, `ST_Intersects` 공간질의, `submitted_by = auth.uid()` 정책. 좌표 영구저장은 VWorld 지오코딩.
 
 ## 내 제보 (사용자 편집)
 
-좌측 **‘제보 추가’** → 지도를 클릭해 위치 지정(📍 마커 드래그로 미세조정) → 이름·분류·무료규칙 입력 → 저장. 마커 팝업에서 **편집·삭제**. 데이터는 브라우저 **localStorage**에 저장되어 새로고침해도 유지되고, **⬇ 내보내기 / ⬆ 가져오기**(JSON)로 백업·공유할 수 있다(향후 백엔드 제보 API로 이어짐).
+좌측 **‘제보 추가’** → 지도를 클릭해 위치 지정(📍 마커 드래그로 미세조정) → 이름·분류·무료규칙 입력 → 저장. 마커 팝업에서 **편집·삭제**. 공유 서버 모드면 **모두에게 즉시 반영**, 로컬 모드면 `localStorage`에 저장. **⬇ 내보내기 / ⬆ 가져오기**(JSON)로 백업·공유.
 
 - 시드 데이터는 읽기 전용, **내 제보만 편집 가능**(파란 테두리 마커).
-- **안전 가드**: ‘단속 뜸한 곳(불법)’ 제보는 *소화전·스쿨존·횡단보도·버스정류소·교차로가 아님*을 확인해야 등록된다. ‘주차금지’ 분류는 항상 경고(safety_critical)로 저장.
-- 순수 로직(`lib/userSpots.js`: 검증·안전가드·규칙 정규화·직렬화)은 UI와 분리해 유닛 테스트로 커버.
+- **안전 가드**: ‘단속 뜸한 곳(불법)’ 제보는 *소화전·스쿨존·횡단보도·버스정류소·교차로가 아님*을 확인해야 등록(클라이언트+**서버 양쪽 강제**). ‘주차금지’ 분류는 항상 경고(safety_critical)로 저장.
+- 순수 로직(`lib/userSpots.js`: 검증·안전가드·규칙 정규화·직렬화)은 UI·서버와 분리해 유닛 테스트로 커버.
 
 ---
 
@@ -103,7 +117,7 @@ SERVICE_KEY=발급받은키 node scripts/ingest.mjs
 ## 로드맵
 
 - **Phase 1** — 공공데이터 시드 → 무료 필터 → `free_rules` 정규화 → 지도 표시 + 안전경고 레이어. *(현재 프로토타입 = 이 구조 + 예시 데이터)*
-- **Phase 2** — 크라우드소싱: *(현재 = 로컬 편집/제보 + 내보내기·가져오기 구현)* → 다음은 백엔드 제보 API, 원탭 "아직 무료?" 확인, 사진 증빙, **GPS 반경 검증(proof-of-presence)**, 파괴적 편집 고증거, 속성별 시간감쇠 신뢰도.
+- **Phase 2** — 크라우드소싱: *(현재 = 로컬 편집/제보 + **공유 서버(SQLite REST API·뷰포트 질의·서버측 검증) 구현 ✅**)* → 다음은 카카오 로그인/Supabase 승격, 원탭 "아직 무료?" 확인, 사진 증빙, **GPS 반경 검증(proof-of-presence)**, 파괴적 편집 고증거, 속성별 시간감쇠 신뢰도.
 - **Phase 3** — 실시간 여유면수(KOTSA `15099883`), 거주자우선 개방 캘린더, 지역 확장, 합법 수익화(주차공유·개방 예약).
 
 ---
@@ -114,11 +128,14 @@ SERVICE_KEY=발급받은키 node scripts/ingest.mjs
 index.html · app.js · styles.css     지도 UI + 제보 편집기
 lib/freeRules.js                     "지금 무료냐" 규칙 엔진 (코어)
 lib/userSpots.js                     사용자 제보: 검증·안전가드·규칙정규화·저장
+lib/backend.js                       프런트 데이터 계층 (공유 서버 ↔ 로컬 자동 전환)
 lib/holidays.js                      공휴일(프로토타입용)
 data/*.seed.json                     3개 레이어 시드 데이터
 vendor/leaflet* · images             Leaflet 1.9.4 / markercluster 1.5.3 (오프라인)
+scripts/server.mjs                   🌐 공유 백엔드 (내장 SQLite + REST API + 정적 서빙)
+scripts/serve.mjs                    무의존 정적 서버 (로컬 모드)
 scripts/ingest.mjs                   data.go.kr ETL 스켈레톤
-scripts/serve.mjs                    무의존 정적 서버
 test/freeRules.test.js               규칙 엔진 유닛 테스트 (12)
 test/userSpots.test.js               제보 로직 유닛 테스트 (10)
+test/server.test.js                  공유 서버 API 테스트 (5)
 ```

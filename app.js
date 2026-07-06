@@ -4,9 +4,9 @@ import {
   buildFeature, featureToForm, upsertFeature, removeFeature,
   loadUserSpots, saveUserSpots,
 } from './lib/userSpots.js';
+import { detectServer, isServer, apiLoad, apiCreate, apiUpdate, apiDelete } from './lib/backend.js';
 
 const HOLIDAYS = holidaySet();
-const CAT_TO_SEED = { legal_free: 'free', gray_zone: 'gray', no_parking: 'np' };
 
 // ── 지도 ────────────────────────────────────────────────────────────────────
 const map = L.map('map', { zoomControl: true, zoomSnap: 0.5 }).setView([37.5665, 126.9769], 12);
@@ -23,7 +23,12 @@ const grayLayer = L.layerGroup();
 const npLayer = L.layerGroup();
 const layerObj = { legal_free: freeCluster, gray_zone: grayLayer, no_parking: npLayer };
 
-const store = { seed: { free: [], gray: [], np: [] }, user: [] };
+// store.all = 전체 스팟(공식 시드 + 사용자 제보). 서버 모드면 서버에서, 로컬 모드면 시드+localStorage.
+const store = { all: [] };
+const crowdSpots = () => store.all.filter((f) => f.properties.editable);
+const persistLocal = () => { if (!isServer()) saveUserSpots(crowdSpots()); };
+const currentBbox = () => { const b = map.getBounds(); return [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]; };
+async function refreshFromServer() { store.all = await apiLoad(currentBbox()); render(); }
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -112,7 +117,7 @@ function popupHtml(p, ev) {
 
 // ── 렌더 ────────────────────────────────────────────────────────────────────
 function layerFeatures(cat) {
-  return [...store.seed[CAT_TO_SEED[cat]], ...store.user.filter((f) => f.properties.category === cat)];
+  return store.all.filter((f) => f.properties.category === cat);
 }
 
 function render() {
@@ -139,7 +144,9 @@ function render() {
 
   const t = now.toLocaleString('ko-KR', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
   els.stats.innerHTML = `<b>기준: ${t}</b><br>합법 무료 ${count.legal_free}곳 중 <b style="color:var(--free)">지금 무료 ${nowFree}곳</b><br>단속 뜸함 ${count.gray_zone}곳 · 주차금지 ${count.no_parking}곳`;
-  els.mineCount.textContent = store.user.length ? `내 제보 ${store.user.length}곳 (이 브라우저에 저장됨)` : '아직 제보가 없습니다. ‘제보 추가’로 시작하세요.';
+  const mine = crowdSpots().length;
+  const mode = isServer() ? '🌐 공유 서버 (모두에게 보임)' : '📴 로컬 (이 브라우저에만 저장)';
+  els.mineCount.innerHTML = `${mine ? `제보 ${mine}곳` : '아직 제보 없음 — ‘제보 추가’로 시작'}<br><span class="mode">${mode}</span>`;
 }
 
 function syncLayers() {
@@ -259,11 +266,16 @@ function collectForm() {
   };
 }
 
-function saveEditor() {
-  const { errors, feature } = buildFeature(collectForm());
-  if (errors.length) { ed.errors.textContent = '⚠ ' + errors.join('\n⚠ '); return; }
-  store.user = upsertFeature(store.user, feature);
-  saveUserSpots(store.user);
+async function saveEditor() {
+  const form = collectForm();
+  // 서버 모드는 서버가 검증(안전가드 포함), 로컬 모드는 클라이언트 buildFeature
+  const res = isServer()
+    ? (editingId ? await apiUpdate(editingId, form) : await apiCreate(form))
+    : buildFeature(form);
+  if (res.errors.length) { ed.errors.textContent = '⚠ ' + res.errors.join('\n⚠ '); return; }
+  const feature = res.feature;
+  if (isServer()) { await refreshFromServer(); }
+  else { store.all = upsertFeature(store.all, feature); persistLocal(); }
   // 방금 추가/편집한 제보가 바로 보이도록 해당 레이어를 켠다
   const chk = { legal_free: els.lyrFree, gray_zone: els.lyrGray, no_parking: els.lyrNp }[feature.properties.category];
   if (chk && !chk.checked) chk.checked = true;
@@ -273,17 +285,21 @@ function saveEditor() {
   map.panTo([lat, lng]);
 }
 
-function deleteEditor() {
+async function deleteEditor() {
   if (!editingId) return;
   if (!confirm('이 제보를 삭제할까요?')) return;
-  store.user = removeFeature(store.user, editingId);
-  saveUserSpots(store.user);
-  closeEditor(); render();
+  await removeSpot(editingId);
+  closeEditor();
+}
+
+async function removeSpot(id) {
+  if (isServer()) { const r = await apiDelete(id); if (!r.ok) { alert('삭제 실패: ' + (r.errors || []).join(', ')); return; } await refreshFromServer(); }
+  else { store.all = removeFeature(store.all, id); persistLocal(); render(); }
 }
 
 // ── 내보내기 / 가져오기 ──────────────────────────────────────────────────────
 function exportUser() {
-  const fc = { type: 'FeatureCollection', meta: { layer: 'user', exported: true }, features: store.user };
+  const fc = { type: 'FeatureCollection', meta: { layer: 'user', exported: true }, features: crowdSpots() };
   const blob = new Blob([JSON.stringify(fc, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -298,10 +314,14 @@ async function importUser(file) {
     for (const f of feats) {
       if (!f || !f.geometry || !f.properties) continue;
       f.properties.editable = true; f.properties.source = 'crowd';
-      if (!f.properties.id) f.properties.id = `u-imp-${Date.now()}-${added}`;
-      store.user = upsertFeature(store.user, f); added++;
+      if (isServer()) { const form = featureToForm(f); delete form.id; await apiCreate(form); }
+      else {
+        if (!f.properties.id) f.properties.id = `u-imp-${Date.now()}-${added}`;
+        store.all = upsertFeature(store.all, f);
+      }
+      added++;
     }
-    saveUserSpots(store.user); syncLayers(); render();
+    if (isServer()) await refreshFromServer(); else { persistLocal(); syncLayers(); render(); }
     alert(`${added}곳 가져왔습니다.`);
   } catch (e) { alert('가져오기 실패: 올바른 JSON이 아닙니다.'); }
 }
@@ -344,30 +364,34 @@ map.on('click', (e) => { if (editorOpen) setPending(e.latlng.lat, e.latlng.lng);
 document.addEventListener('click', (e) => {
   const btn = e.target.closest('button[data-act]');
   if (!btn) return;
-  const f = store.user.find((x) => x.properties.id === btn.dataset.id);
+  const f = store.all.find((x) => x.properties.id === btn.dataset.id);
   if (!f) return;
   map.closePopup();
   if (btn.dataset.act === 'edit') openEditor(f);
-  else if (btn.dataset.act === 'del') {
-    if (confirm('이 제보를 삭제할까요?')) { store.user = removeFeature(store.user, f.properties.id); saveUserSpots(store.user); render(); }
-  }
+  else if (btn.dataset.act === 'del') { if (confirm('이 제보를 삭제할까요?')) removeSpot(f.properties.id); }
 });
 
 // ── 로드 ────────────────────────────────────────────────────────────────────
+let bboxTimer = null;
 async function load() {
-  const [free, gray, np] = await Promise.all([
-    fetch('./data/free-parking.seed.json').then((r) => r.json()),
-    fetch('./data/gray-zones.seed.json').then((r) => r.json()),
-    fetch('./data/no-parking.seed.json').then((r) => r.json()),
-  ]);
-  store.seed.free = free.features || [];
-  store.seed.gray = gray.features || [];
-  store.seed.np = np.features || [];
-  store.user = loadUserSpots();
+  const server = await detectServer();
+  if (server) {
+    // 공유 서버 모드: 뷰포트로 읽고, 지도 이동 시 재조회(뷰포트 API)
+    store.all = await apiLoad(currentBbox());
+    map.on('moveend', () => { clearTimeout(bboxTimer); bboxTimer = setTimeout(refreshFromServer, 300); });
+  } else {
+    // 로컬 모드: 시드 JSON + localStorage
+    const [free, gray, np] = await Promise.all([
+      fetch('./data/free-parking.seed.json').then((r) => r.json()),
+      fetch('./data/gray-zones.seed.json').then((r) => r.json()),
+      fetch('./data/no-parking.seed.json').then((r) => r.json()),
+    ]);
+    store.all = [...(free.features || []), ...(gray.features || []), ...(np.features || []), ...loadUserSpots()];
+  }
   syncLayers(); render();
 }
 
 load().catch((e) => {
-  $('stats').innerHTML = `<b style="color:var(--warning)">데이터 로드 실패</b><br>정적 서버로 실행: <code>npm run dev</code>`;
+  $('stats').innerHTML = `<b style="color:var(--warning)">데이터 로드 실패</b><br>정적 서버로 실행: <code>npm run dev</code> 또는 공유 서버 <code>npm run server</code>`;
   console.error(e);
 });

@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "node scripts/serve.mjs",
+    "server": "node scripts/server.mjs",
     "test": "node --test",
     "ingest": "node scripts/ingest.mjs"
   },

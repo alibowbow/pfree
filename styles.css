@@ -84,7 +84,8 @@ body.panel-collapsed #panel { display: none; }
 .mine #btn-add { width: 100%; margin-bottom: 8px; }
 .mine-row { display: flex; gap: 6px; }
 .mine-row .btn { flex: 1; }
-.muted-s { font-size: 11px; color: var(--muted); margin-top: 6px; }
+.muted-s { font-size: 11px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
+.muted-s .mode { font-weight: 600; color: var(--text); }
 
 /* 편집 패널 */
 #editor { flex: 0 0 320px; background: var(--bg); border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
