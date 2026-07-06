@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
   <title>전국 무료주차맵 (MVP)</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🅿️%3C/text%3E%3C/svg%3E" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%232f6a50'/%3E%3Ctext x='50' y='70' font-size='58' font-weight='700' text-anchor='middle' fill='%23fff' font-family='sans-serif'%3EP%3C/text%3E%3C/svg%3E" />
   <link rel="stylesheet" href="./vendor/leaflet/leaflet.css" />
   <link rel="stylesheet" href="./vendor/leaflet.markercluster/MarkerCluster.css" />
   <link rel="stylesheet" href="./vendor/leaflet.markercluster/MarkerCluster.Default.css" />
@@ -23,7 +23,8 @@
   </header>
 
   <div id="notice">
-    <span>⚠️ 무료·합법 여부는 시간·정책에 따라 변합니다. 최종 확인은 현장 표지판, <b>주차 책임은 본인</b>.</span>
+    <span class="bar"></span>
+    <span>무료·합법 여부는 시간·정책에 따라 변합니다. 최종 확인은 현장 표지판 기준, <b>주차 책임은 본인</b>.</span>
     <button class="close" id="notice-close" aria-label="닫기">✕</button>
   </div>
 
@@ -130,7 +131,7 @@
         <button id="ed-close" class="x" title="닫기">✕</button>
       </div>
       <div class="ed-body">
-        <div id="ed-hint" class="hint">📍 지도를 클릭해 위치를 지정하세요 (마커를 끌어 미세조정 가능).</div>
+        <div id="ed-hint" class="hint">지도를 클릭해 위치를 지정하세요. 마커를 끌어 미세조정할 수 있습니다.</div>
 
         <label class="fld">이름
           <input id="f-name" type="text" placeholder="예: 주민센터 뒤 무료주차장" />
@@ -138,9 +139,9 @@
 
         <label class="fld">분류
           <select id="f-category">
-            <option value="legal_free">🟢 합법 무료</option>
-            <option value="gray_zone">🟡 단속 뜸한 곳 (불법·정보)</option>
-            <option value="no_parking">🔴 주차금지 경고</option>
+            <option value="legal_free">합법 무료</option>
+            <option value="gray_zone">단속 뜸한 곳 (불법·정보)</option>
+            <option value="no_parking">주차금지 경고</option>
           </select>
         </label>
 
@@ -187,7 +188,7 @@
             <input id="f-guard" type="checkbox" />
             <span>이 위치는 <b>소화전·스쿨존·횡단보도·버스정류소·교차로</b>가 <b>아님</b>을 확인합니다. (안전 치명 구역은 등록 불가)</span>
           </label>
-          <div id="np-note" class="warn-note hidden">🔴 주차금지 경고로 등록됩니다. 추천이 아니라 <b>경고</b> 표시입니다.</div>
+          <div id="np-note" class="warn-note hidden">주차금지 경고로 등록됩니다. 추천이 아니라 <b>경고</b> 표시입니다.</div>
         </div>
 
         <label class="fld">메모

@@ -1,4 +1,4 @@
-import { evaluateSpot, STATE_COLOR, fmtHM } from './lib/freeRules.js';
+import { evaluateSpot, fmtHM } from './lib/freeRules.js';
 import { holidaySet } from './lib/holidays.js';
 import {
   buildFeature, featureToForm, upsertFeature, removeFeature,
@@ -73,12 +73,14 @@ function refDate() {
 const toISO = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 // ── 마커 ────────────────────────────────────────────────────────────────────
+// 절제된 팔레트(양쪽 테마 지도에서 모두 안정적). 액센트 계열로 통일.
+const MARKER_COLOR = { free: '#2f7355', partial: '#a9741f', paid: '#a8a49b', gray: '#94781f', warning: '#a5443a', unknown: '#a8a49b' };
 function pinIcon(state, isUser) {
   const warn = state === 'warning';
   return L.divIcon({
     className: '',
-    html: `<div class="pin ${warn ? 'warning' : ''}" style="background:${STATE_COLOR[state]}${isUser ? ';outline:2px solid #2b7fff;outline-offset:1.5px' : ''}"></div>`,
-    iconSize: [20, 20], iconAnchor: warn ? [10, 10] : [10, 18], popupAnchor: [0, warn ? -12 : -20],
+    html: `<div class="pin ${warn ? 'warning' : ''}" style="background:${MARKER_COLOR[state] || MARKER_COLOR.unknown}${isUser ? ';outline:1.5px solid #3b6cc7;outline-offset:1.5px' : ''}"></div>`,
+    iconSize: [18, 18], iconAnchor: warn ? [9, 9] : [9, 17], popupAnchor: [0, warn ? -11 : -19],
   });
 }
 
@@ -99,14 +101,14 @@ function rulesText(rules) {
 
 function verifyBadge(v) {
   if (!v) return '';
-  const m = { verified: '✅ 검증됨', user: '👤 사용자 제보', stale: '⏳ 재검증 필요', disputed: '⚠️ 제보 상충' };
-  return `<div style="margin-top:6px"><span class="badge">${m[v.status] || v.status} · ${v.check_date || ''}</span></div>`;
+  const m = { verified: ['free', '검증됨'], user: ['paid', '사용자 제보'], stale: ['partial', '재검증 필요'], disputed: ['warning', '제보 상충'] };
+  const [cls, label] = m[v.status] || ['paid', v.status];
+  return `<div style="margin-top:8px"><span class="badge"><span class="dot ${cls}"></span>${label}${v.check_date ? ' · ' + v.check_date : ''}</span></div>`;
 }
 
 function popupHtml(p, ev) {
-  const color = STATE_COLOR[ev.state];
   let body = `<div class="pp"><div class="name">${esc(p.name)}</div>` +
-    `<span class="state" style="background:${color}">${ev.label}</span>` +
+    `<span class="state"><span class="dot ${ev.state}"></span>${ev.label}</span>` +
     `<div class="row">${esc(ev.detail || '')}</div>`;
   if (p.category === 'legal_free') {
     if (p.address) body += `<div class="muted">${esc(p.address)}</div>`;
@@ -115,11 +117,11 @@ function popupHtml(p, ev) {
     if (p.note) body += `<div class="muted">${esc(p.note)}</div>`;
     body += verifyBadge(p.verify);
   } else if (p.category === 'gray_zone') {
-    body += `<div class="graybox">🚫 <b>불법 주정차 구역.</b> ${esc(p.note || '')}<br>안 걸린다는 <u>보장 없음</u> · 주민신고제 대상 · 본인 책임.</div>`;
+    body += `<div class="graybox"><b>불법 주정차 구역.</b> ${esc(p.note || '')}<br>안 걸린다는 보장 없음 · 주민신고제 대상 · 본인 책임.</div>`;
     body += verifyBadge(p.verify);
   } else if (p.category === 'no_parking') {
     const r = p.risk || {};
-    body += `<div class="warnbox">⛔ <b>주정차 절대금지</b> — ${esc(r.zone_type || '')}<br>과태료 ${esc(r.fine || '부과')}${r.citizen_report ? ' · 주민신고제' : ''}${r.safety_critical ? ' · 안전 위협' : ''}<br>${esc(p.note || '')}</div>`;
+    body += `<div class="warnbox"><b>주정차 절대금지</b> — ${esc(r.zone_type || '')}<br>과태료 ${esc(r.fine || '부과')}${r.citizen_report ? ' · 주민신고제' : ''}${r.safety_critical ? ' · 안전 위협' : ''}<br>${esc(p.note || '')}</div>`;
   }
   if (p.editable) {
     body += `<div class="pp-actions"><button class="btn small" data-act="edit" data-id="${esc(p.id)}">편집</button>` +
@@ -161,18 +163,18 @@ function render() {
 
   const t = now.toLocaleString('ko-KR', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
   els.stats.innerHTML =
-    `<div class="now-num">${nowFree}<small>곳 지금 무료</small></div>` +
+    `<div class="now-num ${nowFree ? 'has' : ''}"><span class="mono-num">${nowFree}</span><small>곳 지금 무료</small></div>` +
     `<div class="now-label">합법 무료 ${count.legal_free}곳 표시 중</div>` +
     `<div class="breakdown">` +
-      `<span class="pill"><span class="dot gray"></span>단속뜸 ${count.gray_zone}</span>` +
-      `<span class="pill"><span class="dot warning"></span>주차금지 ${count.no_parking}</span>` +
-      `<span class="pill">${crowdSpots().length ? '내 제보 ' + crowdSpots().length : '제보 0'}</span>` +
+      `<span class="bk"><span class="dot gray"></span>단속뜸 <b>${count.gray_zone}</b></span>` +
+      `<span class="bk"><span class="dot warning"></span>주차금지 <b>${count.no_parking}</b></span>` +
+      `<span class="bk">내 제보 <b>${crowdSpots().length}</b></span>` +
     `</div>` +
-    `<div class="when">⏱ 기준 ${t} · ${isServer() ? '🌐 공유 서버' : '📴 로컬'}</div>`;
+    `<div class="when">기준 ${t} · <span class="${isServer() ? 'sv' : ''}">${isServer() ? '공유 서버' : '로컬 저장'}</span></div>`;
 
   const mine = crowdSpots().length;
-  const mode = isServer() ? '<span class="mode server">🌐 공유 서버 (모두에게 보임)</span>' : '<span class="mode">📴 로컬 (이 브라우저에만 저장)</span>';
-  els.mineCount.innerHTML = `${mine ? `제보 ${mine}곳` : '아직 제보 없음 — ‘제보 추가’로 시작'}<br>${mode}`;
+  const mode = isServer() ? '<span class="mode server">공유 서버 · 모두에게 보임</span>' : '<span class="mode">로컬 · 이 브라우저에만 저장</span>';
+  els.mineCount.innerHTML = `${mine ? `제보 ${mine}곳` : '아직 제보가 없습니다'}<br>${mode}`;
 
   renderNearby();
 }
@@ -180,7 +182,7 @@ function render() {
 // 내 주변 무료 리스트 (현위치 기준 거리정렬)
 function renderNearby() {
   if (!userLoc) {
-    els.near.innerHTML = `<div class="near-empty">현위치를 켜면 가까운 <b>지금 무료</b> 주차를 거리순으로 보여줍니다.</div><button class="btn block" id="near-locate" style="margin-top:8px">📍 현위치 켜기</button>`;
+    els.near.innerHTML = `<div class="near-empty">현위치를 켜면 가까운 <b>지금 무료</b> 주차를 거리순으로 보여줍니다.</div><button class="btn block" id="near-locate" style="margin-top:10px">현위치 켜기</button>`;
     const b = $('near-locate'); if (b) b.addEventListener('click', locate);
     return;
   }
@@ -264,7 +266,7 @@ function setPending(lat, lng) {
   pending = { lat, lng };
   ed.coords.textContent = `좌표: ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
   if (!placeMarker) {
-    placeMarker = L.marker([lat, lng], { draggable: true, icon: L.divIcon({ className: '', html: '<div class="place-pin">📍</div>', iconSize: [26, 26], iconAnchor: [13, 24] }) }).addTo(map);
+    placeMarker = L.marker([lat, lng], { draggable: true, icon: L.divIcon({ className: '', html: '<div class="place-pin"><svg viewBox="0 0 24 24"><path d="M12 2C8.1 2 5 5.1 5 9c0 4.9 7 13 7 13s7-8.1 7-13c0-3.9-3.1-7-7-7z" fill="#2f6a50" stroke="#fff" stroke-width="1.5"/><circle cx="12" cy="9" r="2.4" fill="#fff"/></svg></div>', iconSize: [26, 26], iconAnchor: [13, 25] }) }).addTo(map);
     placeMarker.on('dragend', () => { const ll = placeMarker.getLatLng(); setPending(ll.lat, ll.lng); });
   } else {
     placeMarker.setLatLng([lat, lng]);
@@ -327,7 +329,7 @@ async function saveEditor() {
   const res = isServer()
     ? (editingId ? await apiUpdate(editingId, form) : await apiCreate(form))
     : buildFeature(form);
-  if (res.errors.length) { ed.errors.textContent = '⚠ ' + res.errors.join('\n⚠ '); return; }
+  if (res.errors.length) { ed.errors.textContent = res.errors.join('\n'); return; }
   const feature = res.feature;
   if (isServer()) { await refreshFromServer(); }
   else { store.all = upsertFeature(store.all, feature); persistLocal(); }
