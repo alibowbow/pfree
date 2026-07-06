@@ -12,12 +12,20 @@
 </head>
 <body>
   <header id="topbar">
-    <button id="panel-toggle" title="메뉴 접기/펼치기" aria-label="메뉴 접기/펼치기">☰</button>
-    <div class="brand">🅿️ 전국 무료주차맵 <span class="tag">MVP</span></div>
-    <div id="disclaimer">
-      ⚠️ 무료·합법 여부는 시간·정책에 따라 변할 수 있습니다. 최종 확인은 현장 표지판 기준, <b>주차 책임은 본인</b>에게 있습니다.
-    </div>
+    <button id="panel-toggle" class="icon-btn" title="메뉴" aria-label="메뉴 접기/펼치기">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+    </button>
+    <div class="brand"><span class="logo">P</span> 무료주차맵 <span class="tag">MVP</span></div>
+    <div class="spacer"></div>
+    <button id="theme-toggle" class="icon-btn" title="라이트/다크" aria-label="라이트/다크 전환">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+    </button>
   </header>
+
+  <div id="notice">
+    <span>⚠️ 무료·합법 여부는 시간·정책에 따라 변합니다. 최종 확인은 현장 표지판, <b>주차 책임은 본인</b>.</span>
+    <button class="close" id="notice-close" aria-label="닫기">✕</button>
+  </div>
 
   <div id="app">
     <aside id="panel">
@@ -26,13 +34,29 @@
       <details class="ctl mine" open>
         <summary>내 제보</summary>
         <div class="ctl-body">
-          <button id="btn-add" class="btn primary">➕ 제보 추가</button>
+          <button id="btn-add" class="btn primary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+            제보 추가
+          </button>
           <div class="mine-row">
-            <button id="btn-export" class="btn">⬇ 내보내기</button>
-            <button id="btn-import" class="btn">⬆ 가져오기</button>
+            <button id="btn-export" class="btn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16"/></svg>
+              내보내기
+            </button>
+            <button id="btn-import" class="btn">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3m0 0L8 7m4-4l4 4M4 21h16"/></svg>
+              가져오기
+            </button>
             <input type="file" id="file-import" accept="application/json" hidden />
           </div>
           <div id="mine-count" class="muted-s"></div>
+        </div>
+      </details>
+
+      <details class="ctl" open>
+        <summary>내 주변 무료</summary>
+        <div class="ctl-body">
+          <div id="near"></div>
         </div>
       </details>
 
@@ -48,10 +72,12 @@
       <details class="ctl">
         <summary>무료 유형</summary>
         <div class="ctl-body">
-          <label class="chk"><input type="checkbox" class="ft" value="상시무료" checked> 상시무료</label>
-          <label class="chk"><input type="checkbox" class="ft" value="시간제무료" checked> 시간제무료</label>
-          <label class="chk"><input type="checkbox" class="ft" value="공영개방" checked> 공영개방</label>
-          <label class="chk"><input type="checkbox" class="ft" value="민간개방" checked> 민간개방</label>
+          <div class="chips">
+            <label class="chip-t"><input type="checkbox" class="ft" value="상시무료" checked><span>상시무료</span></label>
+            <label class="chip-t"><input type="checkbox" class="ft" value="시간제무료" checked><span>시간제무료</span></label>
+            <label class="chip-t"><input type="checkbox" class="ft" value="공영개방" checked><span>공영개방</span></label>
+            <label class="chip-t"><input type="checkbox" class="ft" value="민간개방" checked><span>민간개방</span></label>
+          </div>
         </div>
       </details>
 
@@ -77,11 +103,11 @@
       <details class="ctl legend">
         <summary>범례</summary>
         <div class="ctl-body">
-          <div><span class="dot free"></span> 지금 무료</div>
-          <div><span class="dot partial"></span> 조건부 무료(최초 N분 등)</div>
-          <div><span class="dot paid"></span> 지금 유료 / 무료시간대 아님</div>
-          <div><span class="dot gray"></span> 단속 뜸함(불법·본인책임)</div>
-          <div><span class="dot warning"></span> 주정차 절대금지(경고)</div>
+          <div class="lg"><span class="dot free"></span> 지금 무료</div>
+          <div class="lg"><span class="dot partial"></span> 조건부 무료(최초 N분 등)</div>
+          <div class="lg"><span class="dot paid"></span> 지금 유료 / 무료시간대 아님</div>
+          <div class="lg"><span class="dot gray"></span> 단속 뜸함(불법·본인책임)</div>
+          <div class="lg"><span class="dot warning"></span> 주정차 절대금지(경고)</div>
         </div>
       </details>
 
@@ -94,6 +120,9 @@
     </aside>
 
     <div id="map"></div>
+    <button id="locate" title="현위치" aria-label="현위치로 이동">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+    </button>
 
     <aside id="editor" class="hidden" aria-hidden="true">
       <div class="ed-head">

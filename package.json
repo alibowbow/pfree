@@ -9,6 +9,6 @@
     "test": "node --test",
     "ingest": "node scripts/ingest.mjs"
   },
-  "//": "런타임 의존성 없음 — Leaflet 1.9.4 / leaflet.markercluster 1.5.3 은 vendor/ 에 포함(오프라인). npm install 없이 npm run dev 로 실행.",
+  "//": "런타임 의존성 없음 — Leaflet·markercluster·Pretendard 폰트는 vendor/에 포함(오프라인). npm install 없이 실행.",
   "license": "MIT"
 }

@@ -36,8 +36,21 @@ const els = {
   fts: [...document.querySelectorAll('.ft')],
   tmNow: $('tm-now'), tmSim: $('tm-sim'), simBox: $('sim-box'),
   simDay: $('sim-day'), simHour: $('sim-hour'), simHourLbl: $('sim-hour-lbl'),
-  onlyFree: $('only-free'), stats: $('stats'), mineCount: $('mine-count'),
+  onlyFree: $('only-free'), stats: $('stats'), mineCount: $('mine-count'), near: $('near'),
 };
+
+let userLoc = null;   // {lat,lng}
+let meMarker = null;
+
+// 하버사인 거리(m)
+function distM(a, b) {
+  const R = 6371000, toR = Math.PI / 180;
+  const dLat = (b.lat - a.lat) * toR, dLng = (b.lng - a.lng) * toR;
+  const s = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * toR) * Math.cos(b.lat * toR) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(s));
+}
+const fmtDist = (m) => (m < 1000 ? `${Math.round(m / 10) * 10}m` : `${(m / 1000).toFixed(1)}km`);
+const walkMin = (m) => Math.max(1, Math.round(m / 67)); // ~4km/h
 
 // ── 기준 시각 ────────────────────────────────────────────────────────────────
 function refDate() {
@@ -64,8 +77,8 @@ function pinIcon(state, isUser) {
   const warn = state === 'warning';
   return L.divIcon({
     className: '',
-    html: `<div class="pin ${warn ? 'warning' : ''}" style="background:${STATE_COLOR[state]}${isUser ? ';outline:2px solid #2b6cff;outline-offset:1px' : ''}"></div>`,
-    iconSize: [18, 18], iconAnchor: warn ? [9, 9] : [9, 16], popupAnchor: [0, warn ? -10 : -16],
+    html: `<div class="pin ${warn ? 'warning' : ''}" style="background:${STATE_COLOR[state]}${isUser ? ';outline:2px solid #2b7fff;outline-offset:1.5px' : ''}"></div>`,
+    iconSize: [20, 20], iconAnchor: warn ? [10, 10] : [10, 18], popupAnchor: [0, warn ? -12 : -20],
   });
 }
 
@@ -120,12 +133,15 @@ function layerFeatures(cat) {
   return store.all.filter((f) => f.properties.category === cat);
 }
 
+let freeNowFeatures = []; // 내 주변 리스트용 (지금 무료인 합법 스팟)
+
 function render() {
   const now = refDate();
   const activeFts = new Set(els.fts.filter((c) => c.checked).map((c) => c.value));
   const onlyFree = els.onlyFree.checked;
   freeCluster.clearLayers(); grayLayer.clearLayers(); npLayer.clearLayers();
   const count = { legal_free: 0, gray_zone: 0, no_parking: 0 }; let nowFree = 0;
+  freeNowFeatures = [];
 
   for (const cat of ['legal_free', 'gray_zone', 'no_parking']) {
     const on = { legal_free: els.lyrFree, gray_zone: els.lyrGray, no_parking: els.lyrNp }[cat].checked;
@@ -135,6 +151,7 @@ function render() {
       if (cat === 'legal_free' && p.free_type && !activeFts.has(p.free_type)) continue;
       const ev = evaluateSpot(f, now, HOLIDAYS);
       const isFreeNow = ev.state === 'free' || ev.state === 'partial';
+      if (cat === 'legal_free' && isFreeNow) freeNowFeatures.push({ f, ev });
       if (cat === 'legal_free' && onlyFree && !isFreeNow) continue;
       count[cat]++; if (cat === 'legal_free' && isFreeNow) nowFree++;
       const [lng, lat] = f.geometry.coordinates;
@@ -143,10 +160,46 @@ function render() {
   }
 
   const t = now.toLocaleString('ko-KR', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
-  els.stats.innerHTML = `<b>기준: ${t}</b><br>합법 무료 ${count.legal_free}곳 중 <b style="color:var(--free)">지금 무료 ${nowFree}곳</b><br>단속 뜸함 ${count.gray_zone}곳 · 주차금지 ${count.no_parking}곳`;
+  els.stats.innerHTML =
+    `<div class="now-num">${nowFree}<small>곳 지금 무료</small></div>` +
+    `<div class="now-label">합법 무료 ${count.legal_free}곳 표시 중</div>` +
+    `<div class="breakdown">` +
+      `<span class="pill"><span class="dot gray"></span>단속뜸 ${count.gray_zone}</span>` +
+      `<span class="pill"><span class="dot warning"></span>주차금지 ${count.no_parking}</span>` +
+      `<span class="pill">${crowdSpots().length ? '내 제보 ' + crowdSpots().length : '제보 0'}</span>` +
+    `</div>` +
+    `<div class="when">⏱ 기준 ${t} · ${isServer() ? '🌐 공유 서버' : '📴 로컬'}</div>`;
+
   const mine = crowdSpots().length;
-  const mode = isServer() ? '🌐 공유 서버 (모두에게 보임)' : '📴 로컬 (이 브라우저에만 저장)';
-  els.mineCount.innerHTML = `${mine ? `제보 ${mine}곳` : '아직 제보 없음 — ‘제보 추가’로 시작'}<br><span class="mode">${mode}</span>`;
+  const mode = isServer() ? '<span class="mode server">🌐 공유 서버 (모두에게 보임)</span>' : '<span class="mode">📴 로컬 (이 브라우저에만 저장)</span>';
+  els.mineCount.innerHTML = `${mine ? `제보 ${mine}곳` : '아직 제보 없음 — ‘제보 추가’로 시작'}<br>${mode}`;
+
+  renderNearby();
+}
+
+// 내 주변 무료 리스트 (현위치 기준 거리정렬)
+function renderNearby() {
+  if (!userLoc) {
+    els.near.innerHTML = `<div class="near-empty">현위치를 켜면 가까운 <b>지금 무료</b> 주차를 거리순으로 보여줍니다.</div><button class="btn block" id="near-locate" style="margin-top:8px">📍 현위치 켜기</button>`;
+    const b = $('near-locate'); if (b) b.addEventListener('click', locate);
+    return;
+  }
+  const items = freeNowFeatures
+    .map(({ f, ev }) => { const [lng, lat] = f.geometry.coordinates; return { f, ev, d: distM(userLoc, { lat, lng }), lat, lng }; })
+    .sort((a, b) => a.d - b.d)
+    .slice(0, 8);
+  if (!items.length) { els.near.innerHTML = `<div class="near-empty">주변에 ‘지금 무료’ 스팟이 없습니다. 지도를 이동하거나 시각을 바꿔보세요.</div>`; return; }
+  els.near.innerHTML = `<div class="near-list">${items.map((it, i) => {
+    const until = it.ev.until != null ? ` · ${fmtHM(it.ev.until)}까지` : '';
+    return `<div class="near-item" data-i="${i}"><span class="dot ${it.ev.state}"></span>` +
+      `<div class="ni-main"><div class="ni-name">${esc(it.f.properties.name)}</div>` +
+      `<div class="ni-sub">${it.ev.label}${until} · 도보 ${walkMin(it.d)}분</div></div>` +
+      `<div class="ni-dist">${fmtDist(it.d)}</div></div>`;
+  }).join('')}</div>`;
+  els.near.querySelectorAll('.near-item').forEach((el) => el.addEventListener('click', () => {
+    const it = items[Number(el.dataset.i)];
+    map.flyTo([it.lat, it.lng], Math.max(map.getZoom(), 16));
+  }));
 }
 
 function syncLayers() {
@@ -221,6 +274,7 @@ function setPending(lat, lng) {
 function openEditor(feature) {
   editorOpen = true;
   ed.panel.classList.remove('hidden'); ed.panel.setAttribute('aria-hidden', 'false');
+  $('locate').classList.add('hidden'); // 편집기와 겹치지 않게
   ed.errors.textContent = '';
   if (placeMarker) { map.removeLayer(placeMarker); placeMarker = null; }
   pending = null;
@@ -251,6 +305,7 @@ function openEditor(feature) {
 function closeEditor() {
   editorOpen = false; editingId = null; pending = null;
   ed.panel.classList.add('hidden'); ed.panel.setAttribute('aria-hidden', 'true');
+  $('locate').classList.remove('hidden');
   if (placeMarker) { map.removeLayer(placeMarker); placeMarker = null; }
 }
 
@@ -338,6 +393,41 @@ $('panel-toggle').addEventListener('click', () => {
   document.body.classList.toggle('panel-collapsed');
   setTimeout(() => map.invalidateSize(), 60); // 패널 접힘/펼침 후 지도 크기 재계산
 });
+
+// 현위치(GPS)
+function locate() {
+  if (!navigator.geolocation) { alert('이 브라우저는 위치를 지원하지 않습니다.'); return; }
+  const btn = $('locate'); btn.classList.add('active');
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      userLoc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      if (meMarker) map.removeLayer(meMarker);
+      meMarker = L.marker([userLoc.lat, userLoc.lng], {
+        icon: L.divIcon({ className: '', html: '<div class="me-dot"></div>', iconSize: [16, 16], iconAnchor: [8, 8] }),
+        interactive: false, zIndexOffset: 1000,
+      }).addTo(map);
+      render();
+      map.flyTo([userLoc.lat, userLoc.lng], Math.max(map.getZoom(), 15));
+    },
+    (err) => { btn.classList.remove('active'); alert('현위치를 가져올 수 없습니다: ' + err.message); },
+    { enableHighAccuracy: true, timeout: 8000 }
+  );
+}
+$('locate').addEventListener('click', locate);
+
+// 테마(라이트/다크)
+function applyTheme(t) { document.documentElement.dataset.theme = t; }
+$('theme-toggle').addEventListener('click', () => {
+  const cur = document.documentElement.dataset.theme;
+  const isDark = cur ? cur === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+  const next = isDark ? 'light' : 'dark';
+  applyTheme(next); try { localStorage.setItem('pfree.theme', next); } catch {}
+});
+try { const savedTheme = localStorage.getItem('pfree.theme'); if (savedTheme) applyTheme(savedTheme); } catch {}
+
+// 안내바 닫기
+try { if (localStorage.getItem('pfree.notice') === 'off') $('notice').classList.add('hidden'); } catch {}
+$('notice-close').addEventListener('click', () => { $('notice').classList.add('hidden'); try { localStorage.setItem('pfree.notice', 'off'); } catch {} });
 
 $('btn-add').addEventListener('click', () => openEditor(null));
 $('btn-export').addEventListener('click', exportUser);
