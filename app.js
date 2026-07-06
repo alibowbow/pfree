@@ -493,13 +493,14 @@ async function load() {
     store.all = await apiLoad(currentBbox());
     map.on('moveend', () => { clearTimeout(bboxTimer); bboxTimer = setTimeout(refreshFromServer, 300); });
   } else {
-    // 로컬 모드: 시드 JSON + localStorage
-    const [free, gray, np] = await Promise.all([
-      fetch('./data/free-parking.seed.json').then((r) => r.json()),
-      fetch('./data/gray-zones.seed.json').then((r) => r.json()),
-      fetch('./data/no-parking.seed.json').then((r) => r.json()),
+    // 로컬 모드: 실데이터(free-parking.json, ingest 산출물) 우선, 없으면 시드 + localStorage
+    const getJson = (u) => fetch(u).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    const free = (await getJson('./data/free-parking.json')) || (await getJson('./data/free-parking.seed.json')) || { features: [] };
+    const [gray, np] = await Promise.all([
+      getJson('./data/gray-zones.seed.json'),
+      getJson('./data/no-parking.seed.json'),
     ]);
-    store.all = [...(free.features || []), ...(gray.features || []), ...(np.features || []), ...loadUserSpots()];
+    store.all = [...(free.features || []), ...((gray || {}).features || []), ...((np || {}).features || []), ...loadUserSpots()];
   }
   syncLayers(); render();
 }

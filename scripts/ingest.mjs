@@ -1,119 +1,97 @@
 // ────────────────────────────────────────────────────────────────────────────
-// 공공데이터 → 무료주차 GeoJSON 인제스트 (Phase 1 ETL 스켈레톤)
+// 전국 무료주차 실데이터 인제스트
+//   원천: 전국주차장정보표준데이터 (data.go.kr 15012896)
+//   → 무료만 필터 + free_rules 정규화 → data/free-parking.json 출력
+//     (앱과 서버가 이 파일이 있으면 시드 대신 자동으로 사용)
 //
-// 소스: 전국주차장정보표준데이터 (data.go.kr 15012896)
-//   - 무료 필터 → free_rules 정규화 → data/free-parking.json 출력
+//   ▶ 방법 1 (권장·키 불필요): CSV/JSON 파일로
+//       1) https://www.data.go.kr/data/15012896/standard.do → '다운로드'(CSV)
+//       2) node scripts/ingest.mjs 전국주차장정보표준데이터.csv
+//          (EUC-KR/UTF-8, CSV/JSON 자동 처리)
 //
-// 실행:  SERVICE_KEY=발급받은키 node scripts/ingest.mjs
-//   (data.go.kr 무료 개발계정에서 서비스키 발급 후 사용)
-//
-// ⚠️ 필드명 확인 필요: 리서치 시 data.go.kr 이 봇 요청에 403 을 반환해
-//    Open API 영문 태그명은 상세기능정보 페이지에서 1회 대조 후 확정할 것.
-//    (아래 FIELD 매핑은 표준데이터 스키마 기준 추정치)
+//   ▶ 방법 2 (Open API): 활용신청 후 서비스키로
+//       SERVICE_KEY=발급키 API_URL='https://api.odcloud.kr/api/15012896/v1/uddi:...' \
+//         node scripts/ingest.mjs
 // ────────────────────────────────────────────────────────────────────────────
-import { writeFile } from 'node:fs/promises';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { csvToFeatures, rowsToFeatures, looksLikeStandard, parseCsv } from '../lib/ingest.js';
 
-const SERVICE_KEY = process.env.SERVICE_KEY;
-const BASE = 'https://api.odcloud.kr/api/15012896/v1/uddi'; // ← 실제 엔드포인트는 상세페이지에서 확인
-const OUT = new URL('../data/free-parking.json', import.meta.url);
+const OUT = fileURLToPath(new URL('../data/free-parking.json', import.meta.url));
 
-// 표준데이터 컬럼 → 내부 스키마 (확정 전 추정 매핑)
-const FIELD = {
-  name: '주차장명',
-  gubun: '주차장구분',      // 공영/민영
-  type: '주차장유형',       // 노상/노외/부설
-  addrRoad: '소재지도로명주소',
-  addrJibun: '소재지지번주소',
-  spaces: '주차구획수',
-  fee: '요금정보',          // 무료/유료/혼합  ← 1차 필터
-  baseTime: '주차기본시간(분 단위)',
-  baseFee: '주차기본요금',
-  wdStart: '평일운영시작시각', wdEnd: '평일운영종료시각',
-  satStart: '토요일운영시작시각', satEnd: '토요일운영종료시각',
-  holStart: '공휴일운영시작시각', holEnd: '공휴일운영종료시각',
-  lat: '위도', lng: '경도',
-  org: '관리기관명', tel: '전화번호', asof: '데이터기준일자',
-  pk: '주차장관리번호',
-};
-
-const hm = (v) => (v == null || v === '' ? null : String(v).replace(/^(\d{1,2}):?(\d{2})$/, (_, h, m) => `${h.padStart(2, '0')}:${m}`));
-
-// 요금 플래그 + 운영시간 → free_rules 파생
-function deriveRules(row) {
-  const fee = String(row[FIELD.fee] || '').trim();
-  const baseFee = Number(row[FIELD.baseFee] || 0);
-  const isFree = fee === '무료' || (fee !== '유료' && baseFee === 0);
-  if (!isFree && fee !== '혼합') return null; // 무료/혼합만 통과
-
-  const rules = [];
-  const push = (day, s, e) => {
-    if (fee === '무료') rules.push({ day_type: day, start: hm(s), end: hm(e), fee_type: (s || e) ? '시간대무료' : '상시무료' });
-    else if (row[FIELD.baseTime] && baseFee === 0) rules.push({ day_type: day, fee_type: '최초N분무료', first_free_minutes: Number(row[FIELD.baseTime]) });
-    // fee === '혼합' 이고 규칙 판단 불가 → free_rules 비움(재검증 큐로)
-  };
-  push('평일', row[FIELD.wdStart], row[FIELD.wdEnd]);
-  push('토요일', row[FIELD.satStart], row[FIELD.satEnd]);
-  push('공휴일', row[FIELD.holStart], row[FIELD.holEnd]);
-  return rules.length ? rules : (fee === '무료' ? [{ day_type: '전일', fee_type: '상시무료' }] : []);
+function decodeBuffer(buf) {
+  // UTF-8 우선, 한글 헤더가 깨지면 EUC-KR/CP949 재시도(Node full-ICU)
+  let text = new TextDecoder('utf-8').decode(buf);
+  if (!/주차장|위도/.test(text.slice(0, 4000))) {
+    try { text = new TextDecoder('euc-kr').decode(buf); } catch {}
+  }
+  return text;
 }
 
-function toFeature(row) {
-  const rules = deriveRules(row);
-  if (!rules) return null;
-  const lat = Number(row[FIELD.lat]), lng = Number(row[FIELD.lng]);
-  if (!(lat > 33 && lat < 39 && lng > 124 && lng < 132)) return null; // KR bbox 검증
-  const gubun = row[FIELD.gubun] || '';
-  const type = row[FIELD.type] || '';
-  return {
-    type: 'Feature',
-    geometry: { type: 'Point', coordinates: [lng, lat] },
-    properties: {
-      id: `dg-${row[FIELD.pk] || `${lat},${lng}`}`,
-      category: 'legal_free',
-      kind: gubun.includes('공영') ? '공영' : gubun.includes('민영') ? '민영' : (type.includes('부설') ? '부설' : '공영'),
-      free_type: rules.some((r) => r.fee_type === '최초N분무료') ? '시간제무료'
-        : rules.every((r) => r.fee_type === '상시무료') ? '상시무료' : '시간제무료',
-      name: row[FIELD.name] || '무료주차장',
-      address: row[FIELD.addrRoad] || row[FIELD.addrJibun] || '',
-      num_spaces: Number(row[FIELD.spaces]) || null,
-      managing_org: row[FIELD.org] || '',
-      source: 'official',
-      source_dataset: '15012896',
-      parking_mgmt_no: row[FIELD.pk] || null,
-      verify: { status: 'verified', check_date: row[FIELD.asof] || null, confidence: 0.8 },
-      free_rules: rules,
-    },
-  };
+function fromFile(path) {
+  const buf = readFileSync(path);
+  const text = decodeBuffer(buf);
+  if (path.toLowerCase().endsWith('.json')) {
+    const json = JSON.parse(text);
+    const items = Array.isArray(json) ? json : (json.data || json.records || json.features || []);
+    const rows = items.map((it) => (it.properties ? it.properties : it));
+    const headers = rows.length ? Object.keys(rows[0]) : [];
+    if (!looksLikeStandard(headers)) console.warn('⚠ 표준데이터 컬럼이 아닌 것 같습니다. 계속 진행하지만 결과가 비어있을 수 있습니다.');
+    return rowsToFeatures(headers, rows);
+  }
+  const { headers } = parseCsv(text.slice(0, 8000));
+  if (!looksLikeStandard(headers)) {
+    console.warn('⚠ 표준데이터 헤더를 못 찾았습니다. 인코딩(EUC-KR→UTF-8) 또는 파일을 확인하세요.\n  헤더 예: ' + headers.slice(0, 6).join(', '));
+  }
+  return csvToFeatures(text);
 }
 
-async function fetchPage(page, perPage = 1000) {
-  const url = `${BASE}?page=${page}&perPage=${perPage}&serviceKey=${encodeURIComponent(SERVICE_KEY)}&returnType=JSON`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status} — 엔드포인트/서비스키 확인 필요`);
-  return res.json();
+async function fromApi() {
+  const key = process.env.SERVICE_KEY, url = process.env.API_URL;
+  if (!url) throw new Error('API_URL 이 필요합니다 (data.go.kr 15012896 활용신청 상세페이지의 엔드포인트).');
+  const all = [];
+  for (let page = 1; ; page++) {
+    const u = `${url}${url.includes('?') ? '&' : '?'}page=${page}&perPage=1000&serviceKey=${encodeURIComponent(key)}&returnType=JSON`;
+    const res = await fetch(u);
+    if (!res.ok) throw new Error(`HTTP ${res.status} — API_URL/SERVICE_KEY 확인`);
+    const j = await res.json();
+    const items = j.data || j.records || [];
+    if (!items.length) break;
+    all.push(...items);
+    process.stdout.write(`\rAPI page ${page}: 누적 ${all.length}행`);
+    if (items.length < 1000) break;
+  }
+  process.stdout.write('\n');
+  const headers = all.length ? Object.keys(all[0]) : [];
+  return rowsToFeatures(headers, all);
+}
+
+function write(features, stats) {
+  const fc = {
+    type: 'FeatureCollection',
+    meta: { layer: 'legal_free', source: '15012896', real: true, count: features.length },
+    features,
+  };
+  writeFileSync(OUT, JSON.stringify(fc));
+  console.log(`\n총 ${stats.total}행 → 무료 ${stats.free}곳 → 좌표유효 ${stats.kept}곳 저장`);
+  if (stats.badCoord) console.log(`  (좌표 누락/범위밖 ${stats.badCoord}곳 제외)`);
+  console.log(`✅ ${OUT}`);
+  console.log('   앱/서버 재시작 시 이 실데이터가 시드 대신 자동 로드됩니다.');
 }
 
 async function main() {
-  if (!SERVICE_KEY) {
-    console.error('SERVICE_KEY 환경변수가 필요합니다.\n' +
-      '  1) https://www.data.go.kr/data/15012896/ 에서 활용신청 → 서비스키 발급\n' +
-      '  2) SERVICE_KEY=... node scripts/ingest.mjs\n' +
-      '  3) BASE/FIELD(영문 태그) 를 상세기능정보로 1회 대조 후 확정\n' +
-      '지금은 예시 시드(data/*.seed.json)로 앱이 동작합니다.');
-    process.exit(1);
-  }
-  const features = [];
-  for (let page = 1; ; page++) {
-    const json = await fetchPage(page);
-    const rows = json.data || json.records || [];
-    if (!rows.length) break;
-    for (const row of rows) { const f = toFeature(row); if (f) features.push(f); }
-    console.log(`page ${page}: 누적 ${features.length}건`);
-    if (rows.length < 1000) break;
-  }
-  const fc = { type: 'FeatureCollection', meta: { layer: 'legal_free', source: '15012896', seed: false }, features };
-  await writeFile(OUT, JSON.stringify(fc, null, 0));
-  console.log(`✅ ${features.length}건 → ${OUT.pathname}`);
+  const file = process.argv[2];
+  if (file) { const { features, stats } = fromFile(file); write(features, stats); return; }
+  if (process.env.SERVICE_KEY) { const { features, stats } = await fromApi(); write(features, stats); return; }
+  console.log(`전국 무료주차 실데이터 인제스트
+
+사용법:
+  node scripts/ingest.mjs <파일.csv|파일.json>      # data.go.kr에서 받은 표준데이터 파일
+  SERVICE_KEY=키 API_URL=엔드포인트 node scripts/ingest.mjs   # Open API
+
+CSV 받기(키 불필요): https://www.data.go.kr/data/15012896/standard.do → 다운로드
+결과: data/free-parking.json (앱이 자동 사용)`);
+  process.exit(file ? 0 : 1);
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+main().catch((e) => { console.error('오류:', e.message); process.exit(1); });

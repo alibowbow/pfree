@@ -11,7 +11,7 @@
 ```bash
 npm run server     # 🌐 공유 서버(멀티플레이) → http://localhost:8000  ★권장
 npm run dev        # 📴 로컬 전용(시드+localStorage) → http://localhost:8000
-npm test           # 유닛 테스트 (node --test, 27개)
+npm test           # 유닛 테스트 (node --test, 34개)
 ```
 
 - **`npm run server`**: Node 내장 SQLite 백엔드 + REST API. 제보가 **공유 서버에 저장되어 모든 사용자에게 보인다**(진짜 크라우드소싱).
@@ -76,11 +76,25 @@ npm test           # 유닛 테스트 (node --test, 27개)
 
 모두 무료·저장/상업재사용 가능(대개 KOGL 제1유형, 이용허락범위 개별 확인). 좌표 지오코딩은 저장 가능한 **VWorld(국토부)** 권장.
 
+### 전국 실데이터 적용하기 (2분, 키 불필요)
+
+`scripts/ingest.mjs`가 표준데이터를 **무료만 필터 + `free_rules` 정규화**해 `data/free-parking.json`으로 변환하고, **앱/서버는 이 파일이 있으면 시드 대신 자동 로드**한다.
+
 ```bash
-# 실제 데이터 인제스트 (서비스키 필요)
-SERVICE_KEY=발급받은키 node scripts/ingest.mjs
+# 방법 1 (권장): CSV 파일로 — data.go.kr 활용신청/키 불필요
+#   1) https://www.data.go.kr/data/15012896/standard.do → '다운로드'(CSV)
+#   2) 변환 (EUC-KR/UTF-8, CSV/JSON 자동 처리):
+node scripts/ingest.mjs 전국주차장정보표준데이터.csv
+#   3) 재시작 → 전국 무료주차가 지도에 뜸
+npm run server   # 또는 npm run dev
+
+# 방법 2: Open API (활용신청 후 서비스키)
+SERVICE_KEY=발급키 API_URL='https://api.odcloud.kr/api/15012896/v1/uddi:...' node scripts/ingest.mjs
 ```
-> ⚠️ `scripts/ingest.mjs` 의 엔드포인트/영문 필드 태그는 상세기능정보 페이지에서 1회 대조 후 확정할 것(리서치 시 포털이 봇에 403 반환).
+
+- 필터 규칙: `요금정보=무료` 또는 `주차기본요금=0` → 상시무료 / `혼합`+기본요금0 → 최초N분무료 / 그 외(유료) 제외. KR bbox 밖·좌표누락 자동 제거, `주차장관리번호` 중복 제거.
+- `data/free-parking.json`은 `.gitignore` 대상(대용량·재생성 가능). 변환 로직은 `lib/ingest.js`에 순수 함수로 두고 유닛테스트(`test/ingest.test.js`)로 커버.
+- ⚠️ 폐쇄망/허용목록 환경(예: 일부 CI)에서는 data.go.kr 접근이 막힐 수 있으니, 위 **CSV 파일 방식**을 쓰면 네트워크 없이 적용된다.
 
 ---
 
@@ -129,13 +143,16 @@ index.html · app.js · styles.css     지도 UI + 제보 편집기
 lib/freeRules.js                     "지금 무료냐" 규칙 엔진 (코어)
 lib/userSpots.js                     사용자 제보: 검증·안전가드·규칙정규화·저장
 lib/backend.js                       프런트 데이터 계층 (공유 서버 ↔ 로컬 자동 전환)
+lib/ingest.js                        표준데이터 → 무료 GeoJSON 변환 (파싱·필터·free_rules)
 lib/holidays.js                      공휴일(프로토타입용)
 data/*.seed.json                     3개 레이어 시드 데이터
-vendor/leaflet* · images             Leaflet 1.9.4 / markercluster 1.5.3 (오프라인)
-scripts/server.mjs                   🌐 공유 백엔드 (내장 SQLite + REST API + 정적 서빙)
+data/free-parking.json               (ingest 산출물, gitignore) 있으면 실데이터로 자동 사용
+vendor/…                             Leaflet 1.9.4 / markercluster 1.5.3 / Pretendard (오프라인)
+scripts/server.mjs                   공유 백엔드 (내장 SQLite + REST API + 정적 서빙)
 scripts/serve.mjs                    무의존 정적 서버 (로컬 모드)
-scripts/ingest.mjs                   data.go.kr ETL 스켈레톤
+scripts/ingest.mjs                   전국 실데이터 인제스트 (CSV/JSON 파일 · Open API)
 test/freeRules.test.js               규칙 엔진 유닛 테스트 (12)
 test/userSpots.test.js               제보 로직 유닛 테스트 (10)
 test/server.test.js                  공유 서버 API 테스트 (5)
+test/ingest.test.js                  실데이터 변환 파이프라인 테스트 (7)
 ```

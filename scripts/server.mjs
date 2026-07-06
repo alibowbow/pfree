@@ -13,7 +13,7 @@
 //   프로덕션 경로는 이 스키마/엔드포인트를 Supabase(PostGIS+Auth)로 승격하면 됨(README).
 // ────────────────────────────────────────────────────────────────────────────
 import { createServer } from 'node:http';
-import { readFile, readFileSync as rfs } from 'node:fs';
+import { readFile, readFileSync as rfs, existsSync } from 'node:fs';
 import { extname, join, normalize } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { buildFeature } from '../lib/userSpots.js';
@@ -60,17 +60,20 @@ function querySpots(bbox, cats) {
   return db.prepare(sql).all(...args).map((r) => JSON.parse(r.data));
 }
 
-// 최초 실행 시 시드 3파일을 DB로 이관
+// 최초 실행 시 초기 데이터를 DB로 이관.
+// 합법무료는 실데이터(free-parking.json, ingest 산출물)가 있으면 그것을, 없으면 시드를 사용.
 function migrateSeeds() {
   if (stmtCount.get().n > 0) return;
+  const real = join(ROOT, 'data', 'free-parking.json');
+  const legalFile = existsSync(real) ? real : join(ROOT, 'data', 'free-parking.seed.json');
   let n = 0;
-  for (const file of ['free-parking.seed.json', 'gray-zones.seed.json', 'no-parking.seed.json']) {
+  for (const file of [legalFile, join(ROOT, 'data', 'gray-zones.seed.json'), join(ROOT, 'data', 'no-parking.seed.json')]) {
     try {
-      const fc = JSON.parse(rfs(join(ROOT, 'data', file), 'utf8'));
+      const fc = JSON.parse(rfs(file, 'utf8'));
       for (const f of fc.features || []) { saveFeature(f); n++; }
     } catch (e) { console.warn('seed skip', file, e.message); }
   }
-  console.log(`▶ 시드 ${n}곳을 DB로 이관`);
+  console.log(`▶ 초기 데이터 ${n}곳 DB 이관 (합법무료 소스: ${legalFile.endsWith('free-parking.json') ? '실데이터' : '시드'})`);
 }
 migrateSeeds();
 
