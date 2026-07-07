@@ -231,9 +231,11 @@ body.panel-collapsed #panel { display: none; }
 .btn.small { font-size: 12px; padding: 7px 10px; }
 .btn.block { width: 100%; }
 
-.mine #btn-add { width: 100%; margin-bottom: 8px; }
-.mine-row { display: flex; gap: 7px; }
+.mine #btn-add { width: 100%; margin-bottom: 7px; }
+.mine-row { display: flex; gap: 6px; }
 .mine-row .btn { flex: 1; }
+.btn.ghost { border-color: transparent; color: var(--ink-2); background: transparent; padding: 5px 8px; }
+.btn.ghost:hover { color: var(--ink); background: var(--surface-2); }
 .muted-s { font-size: 11px; color: var(--ink-2); margin-top: 10px; line-height: 1.7; }
 .muted-s .mode.server { color: var(--accent); font-weight: 600; }
 
@@ -363,9 +365,14 @@ a.btn { text-decoration: none; }
 
 /* ── responsive ──────────────────────────────────────────────────────────── */
 @media (max-width: 760px) {
-  #app { flex-direction: column; }
-  #panel { flex: 0 0 auto; max-height: 38vh; border-right: none; border-bottom: 1px solid var(--line); }
-  #editor { flex: 0 0 auto; max-height: 62vh; border-left: none; border-top: 1px solid var(--line); }
+  /* 지도가 화면 전체 — 패널은 ☰로 여는 좌측 서랍(지도 위 오버레이) */
+  #panel {
+    position: absolute; top: 0; left: 0; bottom: 0; z-index: 700;
+    width: min(340px, 88vw); max-height: none;
+    border-right: 1px solid var(--line); border-bottom: none;
+    box-shadow: 10px 0 34px rgba(20, 18, 14, .22);
+  }
+  #editor { position: absolute; top: 0; right: 0; bottom: 0; z-index: 720; width: min(360px, 94vw); max-height: none; border-left: 1px solid var(--line); border-top: none; }
   #notice { display: none; }
   #locate { bottom: 16px; }
   .brand .tag { display: none; }

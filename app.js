@@ -22,8 +22,11 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 
 // 도시 줌 이상에서만 주차 마커 표시(전국 뷰가 숫자로 뒤덮이는 것 방지)
 const MIN_MARKER_ZOOM = 11;
-// 네이버지도에서 해당 지점 열기 — 좌표 검색이 그 지점에 핀을 찍어 줌(길찾기 아님)
-const NAVER_AT = (lat, lng) => `https://map.naver.com/p/search/${lat.toFixed(6)},${lng.toFixed(6)}`;
+// 네이버지도에서 지점명으로 열기 — 동명 주차장 구분을 위해 시·군·구를 앞에 붙여 검색
+const NAVER_AT = (name, address) => {
+  const region = String(address || '').split(/\s+/).slice(0, 2).join(' ');
+  return `https://map.naver.com/p/search/${encodeURIComponent(region ? `${region} ${name}` : name)}`;
+};
 const freeCluster = L.markerClusterGroup({
   maxClusterRadius: 70, spiderfyOnMaxZoom: true, showCoverageOnHover: false,
   chunkedLoading: true, removeOutsideVisibleBounds: true,
@@ -191,8 +194,8 @@ function popupHtml(p, ev, lng, lat) {
     body += `<div class="warnbox"><b>주정차 절대금지</b> — ${esc(r.zone_type || '')}<br>과태료 ${esc(r.fine || '부과')}${r.citizen_report ? ' · 주민신고제' : ''}${r.safety_critical ? ' · 안전 위협' : ''}<br>${esc(p.note || '')}</div>`;
   }
   // 네이버지도에서 해당 지점 열기(키 불필요, 앱 설치 시 앱으로 연결)
-  if (p.category === 'legal_free' && lat != null && lng != null) {
-    body += `<div class="pp-actions"><a class="btn small" target="_blank" rel="noopener" href="${NAVER_AT(lat, lng)}">` +
+  if (p.category === 'legal_free') {
+    body += `<div class="pp-actions"><a class="btn small" target="_blank" rel="noopener" href="${NAVER_AT(p.name, p.address)}">` +
       `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><path d="M12 2C8 2 5 5 5 9c0 5 7 13 7 13s7-8 7-13c0-4-3-7-7-7z"/><circle cx="12" cy="9" r="2.4"/></svg>네이버지도에서 보기</a></div>`;
   }
   if (p.editable) {
@@ -502,9 +505,11 @@ $('region-chips').addEventListener('click', (e) => {
   map.flyTo([lat, lng], Math.max(MIN_MARKER_ZOOM + 1, 12));
 });
 
-// 모바일: 지도 먼저 — 패널 섹션 기본 접힘
+// 모바일: 지도가 화면을 채움 — 패널은 기본 숨김(☰로 서랍처럼 열기), 섹션도 접힘
 if (matchMedia('(max-width: 760px)').matches) {
+  document.body.classList.add('panel-collapsed');
   document.querySelectorAll('#panel details[open]').forEach((d) => { d.open = false; });
+  setTimeout(() => map.invalidateSize(), 80);
 }
 
 // ── 검색 (주차장·주소 로컬 + Enter 시 장소[Nominatim]) ──────────────────────
