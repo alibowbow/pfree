@@ -22,7 +22,8 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 
 // 도시 줌 이상에서만 주차 마커 표시(전국 뷰가 숫자로 뒤덮이는 것 방지)
 const MIN_MARKER_ZOOM = 11;
-const NAVER_TO = (name, lat, lng) => `https://map.naver.com/p/directions/-/${lng},${lat},${encodeURIComponent(name)}/-/car`;
+// 네이버지도에서 해당 지점 열기 — 좌표 검색이 그 지점에 핀을 찍어 줌(길찾기 아님)
+const NAVER_AT = (lat, lng) => `https://map.naver.com/p/search/${lat.toFixed(6)},${lng.toFixed(6)}`;
 const freeCluster = L.markerClusterGroup({
   maxClusterRadius: 70, spiderfyOnMaxZoom: true, showCoverageOnHover: false,
   chunkedLoading: true, removeOutsideVisibleBounds: true,
@@ -189,10 +190,10 @@ function popupHtml(p, ev, lng, lat) {
     const r = p.risk || {};
     body += `<div class="warnbox"><b>주정차 절대금지</b> — ${esc(r.zone_type || '')}<br>과태료 ${esc(r.fine || '부과')}${r.citizen_report ? ' · 주민신고제' : ''}${r.safety_critical ? ' · 안전 위협' : ''}<br>${esc(p.note || '')}</div>`;
   }
-  // 길안내(카카오맵 웹 링크, 키 불필요 — 앱 설치 시 앱으로 연결)
+  // 네이버지도에서 해당 지점 열기(키 불필요, 앱 설치 시 앱으로 연결)
   if (p.category === 'legal_free' && lat != null && lng != null) {
-    body += `<div class="pp-actions"><a class="btn small" target="_blank" rel="noopener" href="${NAVER_TO(p.name, lat, lng)}">` +
-      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><path d="M3 11l19-8-8 19-2.5-8.5L3 11z"/></svg>길안내</a></div>`;
+    body += `<div class="pp-actions"><a class="btn small" target="_blank" rel="noopener" href="${NAVER_AT(lat, lng)}">` +
+      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><path d="M12 2C8 2 5 5 5 9c0 5 7 13 7 13s7-8 7-13c0-4-3-7-7-7z"/><circle cx="12" cy="9" r="2.4"/></svg>네이버지도에서 보기</a></div>`;
   }
   if (p.editable) {
     body += `<div class="pp-actions"><button class="btn small" data-act="edit" data-id="${esc(p.id)}">편집</button>` +
