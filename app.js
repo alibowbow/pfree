@@ -11,7 +11,7 @@ const HOLIDAYS = holidaySet();
 let govFeatures = []; // 공공데이터 CSV로 불러온 전국 무료주차(세션 오버레이)
 
 // ── 지도 ────────────────────────────────────────────────────────────────────
-const map = L.map('map', { zoomControl: true, zoomSnap: 0.5 }).setView([37.5665, 126.9769], 12);
+const map = L.map('map', { zoomControl: true, zoomSnap: 1 }).setView([37.5665, 126.9769], 12);
 // OSM 표준 타일 — 한국 지명을 한글(name 태그)로 렌더링(저줌에서도 서울/부산 등 한글).
 // CARTO Voyager는 국제명(영문) 위주라 교체. (프로덕션은 Kakao Map 권장)
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -118,12 +118,20 @@ function markerHtml(state, isUser) {
     `<path d="M14 1.5C7.4 1.5 2 6.9 2 13.5c0 8.7 12 21 12 21s12-12.3 12-21C26 6.9 20.6 1.5 14 1.5z" fill="${color}" stroke="#fff" stroke-width="2.4"/>` +
     `<text x="14" y="18.8" font-size="14" font-weight="700" text-anchor="middle" fill="#fff">${glyph}</text>${badge}</svg></div>`;
 }
+// divIcon은 상태·제보 여부 조합(≤12종)뿐 — 마커 11,000+개가 인스턴스를 공유하도록 캐시
+const iconCache = new Map();
 function pinIcon(state, isUser) {
-  const warn = state === 'warning';
-  return L.divIcon({
-    className: '', html: markerHtml(state, isUser),
-    iconSize: warn ? [28, 28] : [28, 36], iconAnchor: warn ? [14, 14] : [14, 35], popupAnchor: [0, warn ? -15 : -33],
-  });
+  const key = `${state}|${isUser ? 1 : 0}`;
+  let ic = iconCache.get(key);
+  if (!ic) {
+    const warn = state === 'warning';
+    ic = L.divIcon({
+      className: '', html: markerHtml(state, isUser),
+      iconSize: warn ? [28, 28] : [28, 36], iconAnchor: warn ? [14, 14] : [14, 35], popupAnchor: [0, warn ? -15 : -33],
+    });
+    iconCache.set(key, ic);
+  }
+  return ic;
 }
 
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -218,8 +226,10 @@ function layerFeatures(cat) {
 }
 
 let freeNowFeatures = []; // 내 주변 리스트용 (지금 무료인 합법 스팟)
+let renderedGate = null;  // 마지막 렌더의 마커 게이트 상태(줌 ≥ MIN_MARKER_ZOOM)
 
 function render() {
+  renderedGate = map.getZoom() >= MIN_MARKER_ZOOM;
   const now = refDate();
   const activeFts = new Set(els.fts.filter((c) => c.checked).map((c) => c.value));
   const onlyFree = els.onlyFree.checked;
@@ -232,6 +242,7 @@ function render() {
     if (!checked) continue;
     // 합법무료는 마커가 많아 도시 줌 이상에서만 그림(개수는 항상 집계)
     const draw = cat === 'legal_free' ? (map.getZoom() >= MIN_MARKER_ZOOM) : true;
+    const batch = [];
     for (const f of layerFeatures(cat)) {
       const p = f.properties;
       if (cat === 'legal_free' && p.free_type && !activeFts.has(p.free_type)) continue;
@@ -242,7 +253,14 @@ function render() {
       count[cat]++; if (cat === 'legal_free' && isFreeNow) nowFree++;
       if (!draw) continue;
       const [lng, lat] = f.geometry.coordinates;
-      L.marker([lat, lng], { icon: pinIcon(ev.state, p.editable) }).bindPopup(popupHtml(p, ev, lng, lat)).addTo(layerObj[cat]);
+      // 팝업은 지연 생성(열 때 계산) — 타임라인 샘플링·HTML 생성을 마커 수만큼 반복하지 않음
+      batch.push(L.marker([lat, lng], { icon: pinIcon(ev.state, p.editable) })
+        .bindPopup(() => popupHtml(p, evaluateSpot(f, refDate(), HOLIDAYS), lng, lat)));
+    }
+    if (batch.length) {
+      const layer = layerObj[cat];
+      if (layer.addLayers) layer.addLayers(batch); // markercluster 벌크 삽입(개별 addLayer보다 훨씬 빠름)
+      else batch.forEach((m) => m.addTo(layer));
     }
   }
 
@@ -487,7 +505,11 @@ els.fts.forEach((c) => c.addEventListener('change', render));
 els.onlyFree.addEventListener('change', render);
 [els.tmNow, els.tmSim].forEach((el) => el.addEventListener('change', () => { els.simBox.classList.toggle('on', els.tmSim.checked); render(); }));
 els.simDay.addEventListener('change', render);
-els.simHour.addEventListener('input', () => { els.simHourLbl.textContent = fmtHM(Number(els.simHour.value) * 60); render(); });
+let simTimer = null;
+els.simHour.addEventListener('input', () => {
+  els.simHourLbl.textContent = fmtHM(Number(els.simHour.value) * 60); // 라벨은 즉시
+  clearTimeout(simTimer); simTimer = setTimeout(render, 120);          // 렌더는 드래그 멈춘 뒤
+});
 
 $('panel-toggle').addEventListener('click', () => {
   document.body.classList.toggle('panel-collapsed');
@@ -704,8 +726,13 @@ document.querySelectorAll('.chip[data-preset]').forEach((b) => b.addEventListene
 // 지도 클릭 → 위치 지정 (편집기 열려 있을 때만)
 map.on('click', (e) => { if (editorOpen) setPending(e.latlng.lat, e.latlng.lng); });
 
-// 줌 변경 시 마커 표시 갱신 (도시 줌 이상에서만 그림). 서버 모드는 moveend가 처리.
-map.on('zoomend', () => { if (!isServer()) render(); else syncLayers(); });
+// 줌 변경: 마커 집합은 줌과 무관(클러스터러가 알아서 재배치) —
+// 표시 게이트(MIN_MARKER_ZOOM)를 넘나들 때만 재렌더, 그 외엔 힌트만 갱신.
+map.on('zoomend', () => {
+  if (isServer()) { syncLayers(); return; }
+  const gate = map.getZoom() >= MIN_MARKER_ZOOM;
+  if (gate !== renderedGate) render(); else syncLayers();
+});
 
 // 팝업 편집/삭제 버튼 (이벤트 위임)
 document.addEventListener('click', (e) => {
