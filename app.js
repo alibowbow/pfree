@@ -12,16 +12,17 @@ let govFeatures = []; // 공공데이터 CSV로 불러온 전국 무료주차(�
 
 // ── 지도 ────────────────────────────────────────────────────────────────────
 const map = L.map('map', { zoomControl: true, zoomSnap: 0.5 }).setView([37.5665, 126.9769], 12);
-// 레티나(@2x) 지원 베이스맵 — 고해상도 화면에서 선명. (프로덕션은 Kakao Map 권장)
-L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-  maxZoom: 20,
+// OSM 표준 타일 — 한국 지명을 한글(name 태그)로 렌더링(저줌에서도 서울/부산 등 한글).
+// CARTO Voyager는 국제명(영문) 위주라 교체. (프로덕션은 Kakao Map 권장)
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19,
   detectRetina: true,
-  subdomains: 'abcd',
-  attribution: '&copy; OpenStreetMap &copy; CARTO · 무료주차: 공공데이터/사용자 제보',
+  attribution: '&copy; OpenStreetMap · 무료주차: 공공데이터/사용자 제보',
 }).addTo(map);
 
 // 도시 줌 이상에서만 주차 마커 표시(전국 뷰가 숫자로 뒤덮이는 것 방지)
 const MIN_MARKER_ZOOM = 11;
+const KAKAO_TO = (name, lat, lng) => `https://map.kakao.com/link/to/${encodeURIComponent(name)},${lat},${lng}`;
 const freeCluster = L.markerClusterGroup({
   maxClusterRadius: 70, spiderfyOnMaxZoom: true, showCoverageOnHover: false,
   chunkedLoading: true, removeOutsideVisibleBounds: true,
@@ -129,7 +130,7 @@ function verifyBadge(v) {
   return `<div style="margin-top:8px"><span class="badge"><span class="dot ${cls}"></span>${label}${v.check_date ? ' · ' + v.check_date : ''}</span></div>`;
 }
 
-function popupHtml(p, ev) {
+function popupHtml(p, ev, lng, lat) {
   let body = `<div class="pp"><div class="name">${esc(p.name)}</div>` +
     `<span class="state"><span class="dot ${ev.state}"></span>${ev.label}</span>` +
     `<div class="row">${esc(ev.detail || '')}</div>`;
@@ -145,6 +146,11 @@ function popupHtml(p, ev) {
   } else if (p.category === 'no_parking') {
     const r = p.risk || {};
     body += `<div class="warnbox"><b>주정차 절대금지</b> — ${esc(r.zone_type || '')}<br>과태료 ${esc(r.fine || '부과')}${r.citizen_report ? ' · 주민신고제' : ''}${r.safety_critical ? ' · 안전 위협' : ''}<br>${esc(p.note || '')}</div>`;
+  }
+  // 길안내(카카오맵 웹 링크, 키 불필요 — 앱 설치 시 앱으로 연결)
+  if (p.category === 'legal_free' && lat != null && lng != null) {
+    body += `<div class="pp-actions"><a class="btn small" target="_blank" rel="noopener" href="${KAKAO_TO(p.name, lat, lng)}">` +
+      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><path d="M3 11l19-8-8 19-2.5-8.5L3 11z"/></svg>길안내</a></div>`;
   }
   if (p.editable) {
     body += `<div class="pp-actions"><button class="btn small" data-act="edit" data-id="${esc(p.id)}">편집</button>` +
@@ -190,7 +196,7 @@ function render() {
       count[cat]++; if (cat === 'legal_free' && isFreeNow) nowFree++;
       if (!draw) continue;
       const [lng, lat] = f.geometry.coordinates;
-      L.marker([lat, lng], { icon: pinIcon(ev.state, p.editable) }).bindPopup(popupHtml(p, ev)).addTo(layerObj[cat]);
+      L.marker([lat, lng], { icon: pinIcon(ev.state, p.editable) }).bindPopup(popupHtml(p, ev, lng, lat)).addTo(layerObj[cat]);
     }
   }
 
@@ -438,6 +444,103 @@ $('panel-toggle').addEventListener('click', () => {
   setTimeout(() => map.invalidateSize(), 60); // 패널 접힘/펼침 후 지도 크기 재계산
 });
 
+// 줌 힌트 클릭 → 도시 줌으로 확대
+$('zoom-hint').addEventListener('click', () => map.setZoom(MIN_MARKER_ZOOM));
+
+// 모바일: 지도 먼저 — 패널 섹션 기본 접힘
+if (matchMedia('(max-width: 760px)').matches) {
+  document.querySelectorAll('#panel details[open]').forEach((d) => { d.open = false; });
+}
+
+// ── 검색 (주차장·주소 로컬 + Enter 시 장소[Nominatim]) ──────────────────────
+const qEl = $('q'), qRes = $('q-results');
+let qTimer = null, qResults = [];
+
+function hideResults() { qRes.classList.add('hidden'); qRes.innerHTML = ''; qResults = []; }
+
+function localSearch(q) {
+  const needle = q.toLowerCase();
+  const scored = [];
+  for (const f of allFeatures()) {
+    const p = f.properties;
+    if (p.category !== 'legal_free') continue;
+    const name = (p.name || '').toLowerCase();
+    const addr = (p.address || '').toLowerCase();
+    let s = 0;
+    if (name.startsWith(needle)) s = 3;
+    else if (name.includes(needle)) s = 2;
+    else if (addr.includes(needle)) s = 1;
+    if (s) scored.push({ f, s });
+  }
+  scored.sort((a, b) => b.s - a.s);
+  return scored.slice(0, 6).map((x) => x.f);
+}
+
+async function placeSearch(q) {
+  // Nominatim(OSM) — 브라우저에서 직접 호출(CORS 허용), 한국·한국어 우선
+  const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&accept-language=ko&countrycodes=kr&limit=4&q=${encodeURIComponent(q)}`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error('place search failed');
+  return (await r.json()).map((it) => ({
+    place: true, name: it.name || it.display_name.split(',')[0],
+    sub: it.display_name, lat: Number(it.lat), lng: Number(it.lon),
+  }));
+}
+
+function renderResults(items, tip) {
+  qResults = items;
+  if (!items.length && !tip) { hideResults(); return; }
+  qRes.innerHTML = items.map((it, i) => {
+    if (it.place) {
+      return `<div class="q-item" data-i="${i}">` +
+        `<svg class="qi-place" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C8 2 5 5 5 9c0 5 7 13 7 13s7-8 7-13c0-4-3-7-7-7z"/><circle cx="12" cy="9" r="2.4"/></svg>` +
+        `<div class="qi-main"><div class="qi-name">${esc(it.name)}</div><div class="qi-sub">${esc(it.sub)}</div></div></div>`;
+    }
+    const p = it.properties, [lng, lat] = it.geometry.coordinates;
+    const d = userLoc ? fmtDist(distM(userLoc, { lat, lng })) : '';
+    return `<div class="q-item" data-i="${i}"><span class="dot free"></span>` +
+      `<div class="qi-main"><div class="qi-name">${esc(p.name)}</div><div class="qi-sub">${esc(p.address || p.free_type || '')}</div></div>` +
+      (d ? `<span class="qi-dist">${d}</span>` : '') + `</div>`;
+  }).join('') + (tip ? `<div class="q-tip">${tip}</div>` : '');
+  qRes.classList.remove('hidden');
+}
+
+async function runSearch(q, withPlaces) {
+  q = q.trim();
+  if (q.length < 2) { hideResults(); return; }
+  const local = localSearch(q);
+  if (!withPlaces) {
+    renderResults(local, local.length ? 'Enter를 누르면 장소·주소도 검색합니다' : 'Enter를 누르면 장소·주소를 검색합니다');
+    return;
+  }
+  let places = [];
+  let tip = '';
+  try { places = await placeSearch(q); } catch { tip = '장소 검색 실패 — 네트워크 확인'; }
+  renderResults([...local, ...places], tip);
+}
+
+function goToResult(it) {
+  hideResults(); qEl.blur();
+  if (it.place) { map.flyTo([it.lat, it.lng], Math.max(map.getZoom(), 14)); return; }
+  const [lng, lat] = it.geometry.coordinates;
+  map.flyTo([lat, lng], Math.max(map.getZoom(), 16));
+  const ev = evaluateSpot(it, refDate(), HOLIDAYS);
+  setTimeout(() => {
+    L.popup({ offset: [0, -26] }).setLatLng([lat, lng]).setContent(popupHtml(it.properties, ev, lng, lat)).openOn(map);
+  }, 650);
+}
+
+qEl.addEventListener('input', () => { clearTimeout(qTimer); qTimer = setTimeout(() => runSearch(qEl.value, false), 250); });
+qEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); clearTimeout(qTimer); runSearch(qEl.value, true); }
+  else if (e.key === 'Escape') { hideResults(); qEl.blur(); }
+});
+qRes.addEventListener('click', (e) => {
+  const el = e.target.closest('.q-item');
+  if (el) goToResult(qResults[Number(el.dataset.i)]);
+});
+document.addEventListener('click', (e) => { if (!e.target.closest('#search')) hideResults(); });
+
 // 현위치(GPS)
 function locate() {
   if (!navigator.geolocation) { alert('이 브라우저는 위치를 지원하지 않습니다.'); return; }
@@ -560,7 +663,11 @@ async function load() {
       getJson('./data/gray-zones.seed.json'),
       getJson('./data/no-parking.seed.json'),
     ]);
-    store.all = [...(free.features || []), ...((community || {}).features || []), ...((gray || {}).features || []), ...((np || {}).features || []), ...loadUserSpots()];
+    // localStorage에 같은 id가 있으면(예: 커뮤니티 스팟을 편집한 사본) 저장본이 이김 — 중복 방지
+    const user = loadUserSpots();
+    const userIds = new Set(user.map((f) => f.properties.id));
+    const base = [...(free.features || []), ...((community || {}).features || []), ...((gray || {}).features || []), ...((np || {}).features || [])];
+    store.all = [...base.filter((f) => !userIds.has(f.properties.id)), ...user];
   }
   syncLayers(); render();
 }

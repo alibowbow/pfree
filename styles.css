@@ -88,6 +88,33 @@ button { font-family: inherit; color: inherit; }
 .brand .logo svg { width: 21px; height: 21px; filter: drop-shadow(0 1px 1px rgba(28, 26, 22, .18)); }
 .brand .tag { font-size: 9.5px; font-weight: 600; letter-spacing: 0.08em; color: var(--ink-3); border: 1px solid var(--line-2); border-radius: 4px; padding: 2px 5px; }
 #topbar .spacer { flex: 1; }
+
+/* 검색 */
+#search { position: relative; flex: 1; max-width: 400px; margin-left: 10px; min-width: 0; }
+#search .s-ico { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 15px; height: 15px; color: var(--ink-3); pointer-events: none; }
+#q {
+  width: 100%; font: inherit; font-size: 13px; color: var(--ink); background: var(--surface-2);
+  border: 1px solid transparent; border-radius: 999px; padding: 8px 14px 8px 32px; outline: none;
+  transition: border-color .15s, background .15s;
+}
+#q::placeholder { color: var(--ink-3); }
+#q:focus { background: var(--surface); border-color: var(--accent); box-shadow: var(--tap); }
+#q::-webkit-search-cancel-button { -webkit-appearance: none; }
+#q-results {
+  position: absolute; top: calc(100% + 8px); left: 0; right: 0; z-index: 800;
+  background: var(--surface); border: 1px solid var(--line-2); border-radius: var(--r);
+  box-shadow: var(--shadow-pop); max-height: 340px; overflow-y: auto; padding: 5px;
+}
+#q-results.hidden { display: none; }
+.q-item { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: var(--r-sm); cursor: pointer; }
+.q-item:hover, .q-item.sel { background: var(--surface-2); }
+.q-item .dot { width: 8px; height: 8px; flex: 0 0 auto; }
+.q-item .qi-place { width: 14px; height: 14px; flex: 0 0 auto; color: var(--ink-3); }
+.q-item .qi-main { min-width: 0; flex: 1; }
+.q-item .qi-name { font-size: 13px; font-weight: 550; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.q-item .qi-sub { font-size: 11px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+.q-item .qi-dist { font-size: 11.5px; font-weight: 600; color: var(--ink-2); white-space: nowrap; }
+.q-tip { font-size: 11px; color: var(--ink-3); padding: 7px 10px; border-top: 1px solid var(--line); }
 .icon-btn { display: grid; place-items: center; width: 34px; height: 34px; border-radius: var(--r-sm); background: transparent; border: none; color: var(--ink-2); cursor: pointer; transition: background .16s, color .16s; }
 .icon-btn:hover { background: var(--surface-2); color: var(--ink); }
 .icon-btn svg { width: 18px; height: 18px; }
@@ -231,10 +258,12 @@ input[type=range]::-moz-range-thumb { width: 13px; height: 13px; border-radius: 
 #zoom-hint {
   position: absolute; top: 16px; left: 50%; transform: translateX(-50%); z-index: 600;
   background: var(--surface); border: 1px solid var(--line-2); border-radius: 999px;
-  padding: 8px 16px; font-size: 12.5px; font-weight: 600; color: var(--ink-2);
-  box-shadow: var(--shadow-pop); pointer-events: none; white-space: nowrap;
+  padding: 8px 16px; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--ink-2);
+  box-shadow: var(--shadow-pop); white-space: nowrap; cursor: pointer; transition: color .15s, border-color .15s;
 }
+#zoom-hint:hover { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
 #zoom-hint.hidden { display: none; }
+a.btn { text-decoration: none; }
 .me-dot { width: 14px; height: 14px; border-radius: 50%; background: #3b6cc7; border: 2.5px solid #fff; box-shadow: 0 0 0 4px rgba(59,108,199,.22); }
 :root[data-theme='dark'] .me-dot { border-color: #1c1b19; }
 
@@ -315,10 +344,15 @@ input[type=range]::-moz-range-thumb { width: 13px; height: 13px; border-radius: 
 /* ── responsive ──────────────────────────────────────────────────────────── */
 @media (max-width: 760px) {
   #app { flex-direction: column; }
-  #panel { flex: 0 0 auto; max-height: 42vh; border-right: none; border-bottom: 1px solid var(--line); }
+  #panel { flex: 0 0 auto; max-height: 38vh; border-right: none; border-bottom: 1px solid var(--line); }
   #editor { flex: 0 0 auto; max-height: 62vh; border-left: none; border-top: 1px solid var(--line); }
   #notice { display: none; }
   #locate { bottom: 16px; }
+  .brand .tag { display: none; }
+  #search { margin-left: 4px; }
+  #q { font-size: 16px; } /* iOS 자동 확대 방지 */
+  #stats { padding: 14px 16px 12px; }
+  #stats .now-num { font-size: 28px; }
 }
 
 /* map tiles: tone to match paper/ink palette */

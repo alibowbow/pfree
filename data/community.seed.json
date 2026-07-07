@@ -7,7 +7,7 @@
   "features": [
     {
       "type": "Feature",
-      "geometry": { "type": "Point", "coordinates": [129.1850, 35.3200] },
+      "geometry": { "type": "Point", "coordinates": [129.1838, 35.3258] },
       "properties": {
         "id": "comm-sodubang-park",
         "category": "legal_free",
@@ -22,7 +22,7 @@
         "free_rules": [
           { "day_type": "전일", "fee_type": "상시무료" }
         ],
-        "note": "정관 소두방공원(정관박물관·도서관·축구장) 주차장. 좌표는 주소 기반 추정 — 실제 위치와 다르면 마커를 드래그해 조정하세요."
+        "note": "정관 소두방공원(정관박물관·도서관·축구장) 주차장. 사용자 제보로 위치 북쪽 조정(2026-07) — 어긋나면 편집에서 마커를 드래그해 조정하세요."
       }
     }
   ]
