@@ -144,6 +144,26 @@ function verifyBadge(v) {
   return `<div style="margin-top:8px"><span class="badge"><span class="dot ${cls}"></span>${label}${v.check_date ? ' · ' + v.check_date : ''}</span></div>`;
 }
 
+// 오늘(기준 시각의 요일유형) 24시간 무료/유료 타임라인 — 규칙 엔진을 15분 단위로 샘플링
+function timelineHtml(p, now) {
+  if (!p.free_rules || !p.free_rules.length) return '';
+  const probe = new Date(now);
+  const segs = [];
+  let cur = null;
+  for (let m = 0; m < 1440; m += 15) {
+    probe.setHours(Math.floor(m / 60), m % 60, 0, 0);
+    const st = evaluateSpot({ properties: p }, probe, HOLIDAYS).state;
+    if (cur && cur.state === st) cur.end = m + 15;
+    else { cur = { state: st, start: m, end: m + 15 }; segs.push(cur); }
+  }
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const bars = segs.map((s) =>
+    `<span class="tl-seg ${s.state}" style="left:${(s.start / 14.4).toFixed(2)}%;width:${((s.end - s.start) / 14.4).toFixed(2)}%"></span>`).join('');
+  return `<div class="tl-wrap"><div class="tl-head">오늘 무료 시간대</div>` +
+    `<div class="tl">${bars}<span class="tl-now" style="left:${(nowMin / 14.4).toFixed(2)}%"></span></div>` +
+    `<div class="tl-hours"><span>0시</span><span>6시</span><span>12시</span><span>18시</span><span>24시</span></div></div>`;
+}
+
 function popupHtml(p, ev, lng, lat) {
   let body = `<div class="pp"><div class="name">${esc(p.name)}</div>` +
     `<span class="state"><span class="dot ${ev.state}"></span>${ev.label}</span>` +
@@ -151,7 +171,15 @@ function popupHtml(p, ev, lng, lat) {
   if (p.category === 'legal_free') {
     if (p.address) body += `<div class="muted">${esc(p.address)}</div>`;
     body += `<div class="row">${p.num_spaces ? '주차면 ' + p.num_spaces + '면 · ' : ''}${esc(p.kind || '')} · ${esc(p.free_type || '')}</div>`;
-    body += `<div class="row" style="margin-top:6px">${rulesText(p.free_rules)}</div>`;
+    body += timelineHtml(p, refDate());
+    body += `<div class="row" style="margin-top:7px">${rulesText(p.free_rules)}</div>`;
+    if (p.hours) body += `<div class="muted" style="margin-top:4px">운영 ${esc(p.hours)}</div>`;
+    if (p.tel) {
+      body += `<div class="muted">문의 <a class="tel" href="tel:${esc(String(p.tel).replace(/[^0-9+\-]/g, ''))}">${esc(p.tel)}</a>` +
+        (p.managing_org ? ` · ${esc(p.managing_org)}` : '') + `</div>`;
+    } else if (p.managing_org) {
+      body += `<div class="muted">관리 ${esc(p.managing_org)}</div>`;
+    }
     if (p.note) body += `<div class="muted">${esc(p.note)}</div>`;
     body += verifyBadge(p.verify);
   } else if (p.category === 'gray_zone') {
@@ -464,6 +492,14 @@ $('panel-toggle').addEventListener('click', () => {
 
 // 줌 힌트 클릭 → 도시 줌으로 확대
 $('zoom-hint').addEventListener('click', () => map.setZoom(MIN_MARKER_ZOOM));
+
+// 지역 빠른 이동
+$('region-chips').addEventListener('click', (e) => {
+  const b = e.target.closest('.chip-r');
+  if (!b) return;
+  const [lat, lng] = b.dataset.ll.split(',').map(Number);
+  map.flyTo([lat, lng], Math.max(MIN_MARKER_ZOOM + 1, 12));
+});
 
 // 모바일: 지도 먼저 — 패널 섹션 기본 접힘
 if (matchMedia('(max-width: 760px)').matches) {

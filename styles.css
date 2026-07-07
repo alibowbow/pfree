@@ -299,6 +299,26 @@ a.btn { text-decoration: none; }
 .pp .badge .dot { width: 6px; height: 6px; }
 .pp-actions { display: flex; gap: 7px; margin-top: 12px; }
 .pp-actions .btn { flex: 1; }
+.pp .tel { color: var(--accent); font-weight: 600; text-decoration: none; }
+.pp .tel:hover { text-decoration: underline; }
+
+/* 24시간 무료 타임라인 */
+.tl-wrap { margin-top: 10px; }
+.tl-head { font-size: 10.5px; font-weight: 650; letter-spacing: .03em; color: var(--ink-2); margin-bottom: 5px; }
+.tl { position: relative; height: 10px; border-radius: 5px; background: var(--surface-2); overflow: hidden; }
+.tl-seg { position: absolute; top: 0; bottom: 0; }
+.tl-seg.free { background: var(--s-free); }
+.tl-seg.partial { background: var(--s-partial); }
+.tl-seg.paid, .tl-seg.unknown { background: transparent; }
+.tl-now { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--ink); }
+.tl-hours { display: flex; justify-content: space-between; font-size: 9.5px; color: var(--ink-3); margin-top: 4px; font-variant-numeric: tabular-nums; }
+
+/* 지역 빠른 이동 칩 */
+.chip-r {
+  font: inherit; font-size: 12px; font-weight: 550; padding: 6px 12px; border-radius: 999px;
+  background: transparent; color: var(--ink-2); border: 1px solid var(--line-2); cursor: pointer; transition: all .15s;
+}
+.chip-r:hover { background: var(--accent-wash); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 30%, transparent); }
 
 /* ── editor ──────────────────────────────────────────────────────────────── */
 #editor { flex: 0 0 344px; background: var(--surface); border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }

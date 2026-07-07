@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseCsv, csvToFeatures, rowsToFeatures, deriveFreeRules, makeGetter, looksLikeStandard } from '../lib/ingest.js';
+import { parseCsv, csvToFeatures, rowsToFeatures, deriveFreeRules, makeGetter, looksLikeStandard, hoursText } from '../lib/ingest.js';
 
 // 실제 15012896 표준데이터 컬럼(순서 섞음 — 헤더명 매칭 견고성 확인)
 const CSV = [
@@ -71,4 +71,29 @@ test('JSON(객체 배열) 경로 — rowsToFeatures', () => {
   const { headers, rows } = parseCsv(CSV);
   const { features } = rowsToFeatures(headers, rows);
   assert.equal(features.length, 3);
+});
+
+// 실제 표준데이터 전체 컬럼(운영시각·전화번호 포함) 픽스처
+const FULL = [
+  '주차장관리번호,주차장명,주차장구분,주차장유형,소재지도로명주소,소재지지번주소,주차구획수,급지구분,부제시행구분,운영요일,평일운영시작시각,평일운영종료시각,토요일운영시작시각,토요일운영종료시각,공휴일운영시작시각,공휴일운영종료시각,요금정보,주차기본시간,주차기본요금,추가단위시간,추가단위요금,1일주차권요금적용시간,1일주차권요금,월정기권요금,결제방법,특기사항,관리기관명,전화번호,위도,경도,장애인,데이터기준일자',
+  'F-1,전일무료 주차장,공영,노외,서울 중구 A로 1,,30,기타,미시행,평일+토요일+공휴일,00:00,23:59,00:00,23:59,00:00,23:59,무료,0,0,,,,,,,,중구청,02-100-2000,37.56,126.98,,2026-06-23',
+  'F-2,주간운영 무료주차장,공영,노상,부산 금정구 B로 2,,20,기타,미시행,평일+토요일+공휴일,9:00,18:00,9:00,18:00,10:00,17:00,무료,0,0,,,,,,,,금정구청,051-200-3000,35.28,129.09,,2026-06-23',
+].join('\n');
+
+test('전화번호·운영시간 강화 필드', () => {
+  const { features } = csvToFeatures(FULL);
+  const allDay = features.find((f) => f.properties.name === '전일무료 주차장');
+  assert.equal(allDay.properties.tel, '02-100-2000');
+  assert.equal(allDay.properties.hours, '24시간');
+  const dayOnly = features.find((f) => f.properties.name === '주간운영 무료주차장');
+  assert.equal(dayOnly.properties.tel, '051-200-3000');
+  assert.equal(dayOnly.properties.hours, '평일 09:00~18:00 · 토 09:00~18:00 · 공휴일 10:00~17:00');
+});
+
+test('hoursText — 매일 동일/부분 누락', () => {
+  const mk = (o) => (k) => o[k] ?? '';
+  assert.equal(hoursText(mk({ wdS: '9:00', wdE: '18:00', satS: '9:00', satE: '18:00', holS: '9:00', holE: '18:00' })), '매일 09:00~18:00');
+  assert.equal(hoursText(mk({ wdS: '9:00', wdE: '18:00', satS: '10:00', satE: '17:00', holS: '10:00', holE: '17:00' })), '평일 09:00~18:00 · 주말·공휴일 10:00~17:00');
+  assert.equal(hoursText(mk({})), undefined);
+  assert.equal(hoursText(mk({ wdS: '9:00', wdE: '18:00' })), '평일 09:00~18:00');
 });

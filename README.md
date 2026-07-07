@@ -11,7 +11,7 @@
 ```bash
 npm run server     # 🌐 공유 서버(멀티플레이) → http://localhost:8000  ★권장
 npm run dev        # 📴 로컬 전용(시드+localStorage) → http://localhost:8000
-npm test           # 유닛 테스트 (node --test, 34개)
+npm test           # 유닛 테스트 (node --test, 36개)
 ```
 
 - **`npm run server`**: Node 내장 SQLite 백엔드 + REST API. 제보가 **공유 서버에 저장되어 모든 사용자에게 보인다**(진짜 크라우드소싱).
@@ -127,7 +127,7 @@ SERVICE_KEY=발급키 API_URL='https://api.odcloud.kr/api/15012896/v1/uddi:...' 
 
 ## 기술 스택
 
-- **프로토타입**: Leaflet + `leaflet.markercluster` + **CARTO Voyager 레티나(@2x) 타일**(고해상도 화면 대응, `detectRetina`), 바닐라 JS(ES module). Leaflet은 `vendor/`에 포함해 설치·CDN 없이 동작. 규칙 엔진·제보 로직은 프레임워크 무관 순수 모듈.
+- **프로토타입**: Leaflet + `leaflet.markercluster` + **OSM 표준 타일**(한국 지명 한글 표기, `detectRetina`), 바닐라 JS(ES module). Leaflet은 `vendor/`에 포함해 설치·CDN 없이 동작. 규칙 엔진·제보 로직은 프레임워크 무관 순수 모듈.
 - **프로덕션 권장**: 베이스맵 **Kakao Map**(도로명·POI 우수, 1st-party 무료 클러스터러) + 지오코딩 **VWorld**(좌표 영구저장 가능) + 백엔드 **PostgreSQL/PostGIS**(반경검색·conflation).
 
 ---
@@ -158,5 +158,5 @@ scripts/ingest.mjs                   전국 실데이터 인제스트 (CSV/JSON 
 test/freeRules.test.js               규칙 엔진 유닛 테스트 (12)
 test/userSpots.test.js               제보 로직 유닛 테스트 (10)
 test/server.test.js                  공유 서버 API 테스트 (5)
-test/ingest.test.js                  실데이터 변환 파이프라인 테스트 (7)
+test/ingest.test.js                  실데이터 변환 파이프라인 테스트 (9)
 ```
