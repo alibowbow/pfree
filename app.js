@@ -22,7 +22,7 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 
 // 도시 줌 이상에서만 주차 마커 표시(전국 뷰가 숫자로 뒤덮이는 것 방지)
 const MIN_MARKER_ZOOM = 11;
-const KAKAO_TO = (name, lat, lng) => `https://map.kakao.com/link/to/${encodeURIComponent(name)},${lat},${lng}`;
+const NAVER_TO = (name, lat, lng) => `https://map.naver.com/p/directions/-/${lng},${lat},${encodeURIComponent(name)}/-/car`;
 const freeCluster = L.markerClusterGroup({
   maxClusterRadius: 70, spiderfyOnMaxZoom: true, showCoverageOnHover: false,
   chunkedLoading: true, removeOutsideVisibleBounds: true,
@@ -35,7 +35,21 @@ const freeVisible = () => els.lyrFree.checked && map.getZoom() >= MIN_MARKER_ZOO
 // store.all = 전체 스팟(공식 시드 + 사용자 제보). 서버 모드면 서버에서, 로컬 모드면 시드+localStorage.
 const store = { all: [] };
 const crowdSpots = () => store.all.filter((f) => f.properties.editable);
-const persistLocal = () => { if (!isServer()) saveUserSpots(crowdSpots()); };
+
+// 커뮤니티 시드 원본 스냅샷(id→JSON)·삭제 톰스톤 — 로컬 모드 전용.
+// 편집 안 한 시드는 localStorage에 저장하지 않아(스냅샷과 동일하면 제외) 시드 업데이트가 막히지 않고,
+// 시드를 삭제하면 톰스톤으로 기록해 새로고침 후 부활하지 않는다.
+const seedSnapshots = new Map();
+const TOMB_KEY = 'pfree.tombstones.v1';
+const loadTombs = () => { try { return new Set(JSON.parse(localStorage.getItem(TOMB_KEY) || '[]')); } catch { return new Set(); } };
+const saveTombs = (s) => { try { localStorage.setItem(TOMB_KEY, JSON.stringify([...s])); } catch {} };
+const persistLocal = () => {
+  if (isServer()) return;
+  saveUserSpots(crowdSpots().filter((f) => {
+    const snap = seedSnapshots.get(f.properties.id);
+    return !snap || JSON.stringify(f) !== snap; // 시드 원본 그대로면 저장 안 함
+  }));
+};
 const currentBbox = () => { const b = map.getBounds(); return [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]; };
 async function refreshFromServer() { store.all = await apiLoad(currentBbox()); render(); }
 
@@ -149,7 +163,7 @@ function popupHtml(p, ev, lng, lat) {
   }
   // 길안내(카카오맵 웹 링크, 키 불필요 — 앱 설치 시 앱으로 연결)
   if (p.category === 'legal_free' && lat != null && lng != null) {
-    body += `<div class="pp-actions"><a class="btn small" target="_blank" rel="noopener" href="${KAKAO_TO(p.name, lat, lng)}">` +
+    body += `<div class="pp-actions"><a class="btn small" target="_blank" rel="noopener" href="${NAVER_TO(p.name, lat, lng)}">` +
       `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><path d="M3 11l19-8-8 19-2.5-8.5L3 11z"/></svg>길안내</a></div>`;
   }
   if (p.editable) {
@@ -399,7 +413,11 @@ async function deleteEditor() {
 
 async function removeSpot(id) {
   if (isServer()) { const r = await apiDelete(id); if (!r.ok) { alert('삭제 실패: ' + (r.errors || []).join(', ')); return; } await refreshFromServer(); }
-  else { store.all = removeFeature(store.all, id); persistLocal(); render(); }
+  else {
+    store.all = removeFeature(store.all, id);
+    if (seedSnapshots.has(id)) { const t = loadTombs(); t.add(id); saveTombs(t); } // 시드 삭제는 톰스톤으로 고정
+    persistLocal(); render();
+  }
 }
 
 // ── 내보내기 / 가져오기 ──────────────────────────────────────────────────────
@@ -454,9 +472,13 @@ if (matchMedia('(max-width: 760px)').matches) {
 
 // ── 검색 (주차장·주소 로컬 + Enter 시 장소[Nominatim]) ──────────────────────
 const qEl = $('q'), qRes = $('q-results');
-let qTimer = null, qResults = [];
+let qTimer = null, qResults = [], qSeq = 0; // qSeq: 늦게 도착한 응답이 최신 결과를 덮지 않게 하는 세대 토큰
 
-function hideResults() { qRes.classList.add('hidden'); qRes.innerHTML = ''; qResults = []; }
+function hideResults() {
+  clearTimeout(qTimer); // 대기 중 디바운스가 닫힌 드롭다운을 다시 열지 않도록
+  qSeq++;               // 진행 중 장소검색 응답 무효화
+  qRes.classList.add('hidden'); qRes.innerHTML = ''; qResults = [];
+}
 
 function localSearch(q) {
   const needle = q.toLowerCase();
@@ -508,6 +530,7 @@ function renderResults(items, tip) {
 async function runSearch(q, withPlaces) {
   q = q.trim();
   if (q.length < 2) { hideResults(); return; }
+  const seq = ++qSeq;
   const local = localSearch(q);
   if (!withPlaces) {
     renderResults(local, local.length ? 'Enter를 누르면 장소·주소도 검색합니다' : 'Enter를 누르면 장소·주소를 검색합니다');
@@ -516,6 +539,7 @@ async function runSearch(q, withPlaces) {
   let places = [];
   let tip = '';
   try { places = await placeSearch(q); } catch { tip = '장소 검색 실패 — 네트워크 확인'; }
+  if (seq !== qSeq) return; // 그 사이 더 새로운 검색/닫기가 있었으면 이 응답은 버림
   renderResults([...local, ...places], tip);
 }
 
@@ -523,15 +547,21 @@ function goToResult(it) {
   hideResults(); qEl.blur();
   if (it.place) { map.flyTo([it.lat, it.lng], Math.max(map.getZoom(), 14)); return; }
   const [lng, lat] = it.geometry.coordinates;
-  map.flyTo([lat, lng], Math.max(map.getZoom(), 16));
   const ev = evaluateSpot(it, refDate(), HOLIDAYS);
-  setTimeout(() => {
+  // flyTo 시간은 거리 비례(원거리 수 초) — 고정 지연 대신 비행 종료(moveend)에 팝업 오픈
+  let opened = false;
+  const open = () => {
+    if (opened) return; opened = true;
     L.popup({ offset: [0, -26] }).setLatLng([lat, lng]).setContent(popupHtml(it.properties, ev, lng, lat)).openOn(map);
-  }, 650);
+  };
+  map.once('moveend', open);
+  setTimeout(open, 3000); // moveend 미발화 대비 안전망
+  map.flyTo([lat, lng], Math.max(map.getZoom(), 16));
 }
 
 qEl.addEventListener('input', () => { clearTimeout(qTimer); qTimer = setTimeout(() => runSearch(qEl.value, false), 250); });
 qEl.addEventListener('keydown', (e) => {
+  if (e.isComposing || e.keyCode === 229) return; // 한글 IME 조합 확정 Enter는 무시(중복 발사 방지)
   if (e.key === 'Enter') { e.preventDefault(); clearTimeout(qTimer); runSearch(qEl.value, true); }
   else if (e.key === 'Escape') { hideResults(); qEl.blur(); }
 });
@@ -663,11 +693,29 @@ async function load() {
       getJson('./data/gray-zones.seed.json'),
       getJson('./data/no-parking.seed.json'),
     ]);
-    // localStorage에 같은 id가 있으면(예: 커뮤니티 스팟을 편집한 사본) 저장본이 이김 — 중복 방지
-    const user = loadUserSpots();
+    // 커뮤니티 시드 스냅샷 등록(편집 여부 판별·톰스톤 대상 식별용)
+    const communityFeats = (community || {}).features || [];
+    for (const f of communityFeats) seedSnapshots.set(f.properties.id, JSON.stringify(f));
+
+    // localStorage 정리: ① 시드 원본과 동일한 자동 사본 제거(시드 업데이트 통과)
+    // ② 과거 버전이 자동 저장한 소두방공원 구좌표 사본 제거(좌표 수정이 막히던 문제 치유)
+    const rawUser = loadUserSpots();
+    let user = rawUser.filter((f) => {
+      const id = f.properties.id;
+      if (JSON.stringify(f) === seedSnapshots.get(id)) return false;
+      if (id === 'comm-sodubang-park') {
+        const [lng, lat] = f.geometry.coordinates;
+        if (lng === 129.185 && lat === 35.32) return false; // 구시드 자동 사본 시그니처
+      }
+      return true;
+    });
+    if (user.length !== rawUser.length) saveUserSpots(user); // 정리된 목록을 저장소에도 반영
+
+    // 같은 id는 저장본(사용자 편집)이 시드를 이김 + 삭제 톰스톤 적용
+    const tombs = loadTombs();
     const userIds = new Set(user.map((f) => f.properties.id));
-    const base = [...(free.features || []), ...((community || {}).features || []), ...((gray || {}).features || []), ...((np || {}).features || [])];
-    store.all = [...base.filter((f) => !userIds.has(f.properties.id)), ...user];
+    const base = [...(free.features || []), ...communityFeats, ...((gray || {}).features || []), ...((np || {}).features || [])];
+    store.all = [...base.filter((f) => !userIds.has(f.properties.id) && !tombs.has(f.properties.id)), ...user];
   }
   syncLayers(); render();
 }
