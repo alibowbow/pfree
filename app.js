@@ -27,10 +27,26 @@ const NAVER_AT = (name, address) => {
   const region = String(address || '').split(/\s+/).slice(0, 2).join(' ');
   return `https://map.naver.com/p/search/${encodeURIComponent(region ? `${region} ${name}` : name)}`;
 };
+// chunkedLoading 사용 금지: 라이브러리의 비동기 청크는 취소가 불가능해서, 삽입 도중
+// 게이트 다운(줌아웃)·레이어 끄기로 그룹이 지도에서 빠지면 _map=null 상태로 청크가
+// 실행돼 크래시함. 대신 아래 addFreeChunked()로 세대 토큰 기반 취소 가능한 청크 삽입.
 const freeCluster = L.markerClusterGroup({
   maxClusterRadius: 70, spiderfyOnMaxZoom: true, showCoverageOnHover: false,
-  chunkedLoading: true, removeOutsideVisibleBounds: true,
+  removeOutsideVisibleBounds: true,
 });
+let freeAddGen = 0; // 새 렌더가 시작되면 증가 → 진행 중이던 청크 삽입 취소
+function addFreeChunked(markers) {
+  const gen = freeAddGen;
+  const SLICE = 2500;
+  let i = 0;
+  const step = () => {
+    if (gen !== freeAddGen) return; // 그 사이 렌더/클리어가 있었음 — 이 배치는 폐기
+    freeCluster.addLayers(markers.slice(i, i + SLICE));
+    i += SLICE;
+    if (i < markers.length) setTimeout(step, 30);
+  };
+  step();
+}
 const grayLayer = L.layerGroup();
 const npLayer = L.layerGroup();
 const layerObj = { legal_free: freeCluster, gray_zone: grayLayer, no_parking: npLayer };
@@ -230,6 +246,7 @@ let renderedGate = null;  // 마지막 렌더의 마커 게이트 상태(줌 ≥
 
 function render() {
   renderedGate = map.getZoom() >= MIN_MARKER_ZOOM;
+  freeAddGen++; // 진행 중이던 청크 삽입 취소(이번 렌더가 새 진실)
   const now = refDate();
   const activeFts = new Set(els.fts.filter((c) => c.checked).map((c) => c.value));
   const onlyFree = els.onlyFree.checked;
@@ -259,7 +276,7 @@ function render() {
     }
     if (batch.length) {
       const layer = layerObj[cat];
-      if (layer.addLayers) layer.addLayers(batch); // markercluster 벌크 삽입(개별 addLayer보다 훨씬 빠름)
+      if (layer === freeCluster) addFreeChunked(batch); // 취소 가능한 벌크 청크 삽입
       else batch.forEach((m) => m.addTo(layer));
     }
   }
@@ -733,6 +750,11 @@ map.on('zoomend', () => {
   const gate = map.getZoom() >= MIN_MARKER_ZOOM;
   if (gate !== renderedGate) render(); else syncLayers();
 });
+
+// 시간이 흘러 무료 상태가 바뀌는 것 반영(줌이 더는 재렌더하지 않으므로):
+// 현재 시각 모드일 때 5분마다 + 탭 복귀 시 재렌더.
+setInterval(() => { if (!document.hidden && els.tmNow.checked) render(); }, 5 * 60 * 1000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden && els.tmNow.checked) render(); });
 
 // 팝업 편집/삭제 버튼 (이벤트 위임)
 document.addEventListener('click', (e) => {
