@@ -528,10 +528,12 @@ els.simHour.addEventListener('input', () => {
   clearTimeout(simTimer); simTimer = setTimeout(render, 120);          // 렌더는 드래그 멈춘 뒤
 });
 
-$('panel-toggle').addEventListener('click', () => {
+const togglePanel = () => {
   document.body.classList.toggle('panel-collapsed');
   setTimeout(() => map.invalidateSize(), 60); // 패널 접힘/펼침 후 지도 크기 재계산
-});
+};
+$('panel-toggle').addEventListener('click', togglePanel);
+$('panel-tab').addEventListener('click', togglePanel); // 패널 모서리 탭(네이버지도식)
 
 // 줌 힌트 클릭 → 도시 줌으로 확대
 $('zoom-hint').addEventListener('click', () => map.setZoom(MIN_MARKER_ZOOM));
