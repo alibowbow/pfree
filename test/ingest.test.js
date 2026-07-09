@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseCsv, csvToFeatures, rowsToFeatures, deriveFreeRules, makeGetter, looksLikeStandard, hoursText } from '../lib/ingest.js';
+import { parseCsv, csvToFeatures, rowsToFeatures, deriveFreeRules, makeGetter, looksLikeStandard, hoursText, feeStructure, firstHourWon, parseRemarkRules, classifySpot, LOW_COST_MAX_WON } from '../lib/ingest.js';
+import { evaluateSpot } from '../lib/freeRules.js';
 
 // 실제 15012896 표준데이터 컬럼(순서 섞음 — 헤더명 매칭 견고성 확인)
 const CSV = [
@@ -96,4 +97,77 @@ test('hoursText — 매일 동일/부분 누락', () => {
   assert.equal(hoursText(mk({ wdS: '9:00', wdE: '18:00', satS: '10:00', satE: '17:00', holS: '10:00', holE: '17:00' })), '평일 09:00~18:00 · 주말·공휴일 10:00~17:00');
   assert.equal(hoursText(mk({})), undefined);
   assert.equal(hoursText(mk({ wdS: '9:00', wdE: '18:00' })), '평일 09:00~18:00');
+});
+
+// ── 저가주차(low_cost) ────────────────────────────────────────────────────────
+test('firstHourWon — 기본/추가단위/기본시간≥60/불가', () => {
+  assert.equal(firstHourWon({ base_time: 30, base_fee: 500, unit_time: 30, unit_fee: 500 }), 1000); // 30분+30분
+  assert.equal(firstHourWon({ base_time: 60, base_fee: 1000 }), 1000);                                // 1시간 기본 = 기본요금
+  // 기본시간 2시간/3,000원: 1시간 주차도 기본시간 창 안이라 기본요금 전액(비례 금지)
+  assert.equal(firstHourWon({ base_time: 120, base_fee: 3000 }), 3000);
+  assert.equal(firstHourWon({ base_time: 30, base_fee: 500 }), 1000);                                 // 추가단위 없음 → 비례
+  assert.equal(firstHourWon({ base_time: 10, base_fee: 400, unit_time: 10, unit_fee: 400 }), 2400);   // 10분400 누적
+  assert.equal(firstHourWon(undefined), null);
+  assert.equal(firstHourWon({ base_fee: 0 }), null);                                                   // 기본시간 없음
+});
+
+test('parseRemarkRules — 명확 패턴만, 노이즈/부정 배제', () => {
+  assert.deepEqual(parseRemarkRules('공휴일 무료개방'), [{ day_type: '공휴일', fee_type: '상시무료', source_text: '특기사항' }]);
+  assert.deepEqual(parseRemarkRules('주말 무료 운영'), [{ day_type: '주말', fee_type: '상시무료', source_text: '특기사항' }]);
+  assert.deepEqual(parseRemarkRules('평일 19시 이후 무료'), [{ day_type: '평일', fee_type: '시간대무료', start: '19:00', end: '24:00', source_text: '특기사항' }]);
+  assert.deepEqual(parseRemarkRules('오후 7시부터 무료'), [{ day_type: '전일', fee_type: '시간대무료', start: '19:00', end: '24:00', source_text: '특기사항' }]);
+  assert.deepEqual(parseRemarkRules('최초 30분 무료'), [{ day_type: '전일', fee_type: '최초N분무료', first_free_minutes: 30, source_text: '특기사항' }]);
+  assert.deepEqual(parseRemarkRules('야간 무료'), [{ day_type: '전일', fee_type: '시간대무료', start: '20:00', end: '08:00', source_text: '특기사항' }]);
+  // 노이즈·부정: 규칙 없음
+  assert.deepEqual(parseRemarkRules('경차ㆍ장애인 50퍼센트 감면'), []);
+  assert.deepEqual(parseRemarkRules('공휴일 무료 아님'), []);
+  // 부정어가 명사(무료주차/무료개방) 뒤에 와도 배제
+  assert.deepEqual(parseRemarkRules('공휴일 무료주차 아님'), []);
+  assert.deepEqual(parseRemarkRules('야간 무료개방 안됨'), []);
+  assert.deepEqual(parseRemarkRules('주말 무료주차 불가'), []);
+  assert.deepEqual(parseRemarkRules(''), []);
+  // 감면+공휴일무료 혼합 문구에서 공휴일 무료만 회수
+  assert.deepEqual(parseRemarkRules('장애인 50% 감면+공휴일 무료 운영'), [{ day_type: '공휴일', fee_type: '상시무료', source_text: '특기사항' }]);
+});
+
+// 유료/혼합 + 추가단위 + 특기사항 포함 픽스처
+const LOW = [
+  '주차장관리번호,주차장명,주차장구분,주차장유형,소재지도로명주소,주차구획수,요금정보,주차기본시간,주차기본요금,추가단위시간,추가단위요금,특기사항,관리기관명,위도,경도,데이터기준일자',
+  'L-1,장뜰시장주차장,공영,노외,경기 이천시 1로 1,40,유료,30,500,30,500,,이천시,37.27,127.44,2026-06-23',       // 1000원/h → 저가
+  'L-2,공휴무료 저가주차장,공영,노상,서울 종로구 2로 2,20,유료,30,500,30,500,공휴일 무료,종로구청,37.57,126.98,2026-06-23', // 저가 + 공휴일 무료
+  'L-3,도심타워,민영,노외,서울 강남구 3로 3,200,유료,10,1000,10,1000,,민간,37.50,127.03,2026-06-23',           // 6000원/h → 제외
+].join('\n');
+
+test('classifySpot — 저가 판정/제외/임계', () => {
+  const { headers, rows } = parseCsv(LOW);
+  const g = (i) => makeGetter(headers, rows[i]);
+  const c1 = classifySpot(g(0));
+  assert.equal(c1.category, 'low_cost');
+  assert.equal(c1.first_hour_won, 1000);
+  assert.ok(c1.first_hour_won <= LOW_COST_MAX_WON);
+  assert.deepEqual(c1.fee_structure, { base_time: 30, base_fee: 500, unit_time: 30, unit_fee: 500, daily_fee: undefined, monthly_fee: undefined });
+  assert.equal(classifySpot(g(2)).category, null); // 도심타워 6000/h 제외
+});
+
+test('csvToFeatures — 저가 포함 + 통계 + 요금필드', () => {
+  const { features, stats } = csvToFeatures(LOW);
+  assert.equal(stats.free, 0);
+  assert.equal(stats.lowCost, 2);   // L-1, L-2
+  assert.equal(stats.kept, 2);      // L-3 제외
+  const l1 = features.find((f) => f.properties.name === '장뜰시장주차장');
+  assert.equal(l1.properties.category, 'low_cost');
+  assert.equal(l1.properties.first_hour_won, 1000);
+  assert.equal(l1.properties.free_type, undefined);
+  assert.ok(l1.properties.free_rules.some((r) => r.fee_type === '유료' && /500원/.test(r.fee_info)));
+});
+
+test('저가 + 특기사항 공휴일무료 → 공휴일엔 free 로 평가', () => {
+  const { features } = csvToFeatures(LOW);
+  const spot = features.find((f) => f.properties.name === '공휴무료 저가주차장');
+  assert.equal(spot.properties.category, 'low_cost');
+  const holidays = new Set(['2026-09-25']); // 임의 공휴일
+  const onHoliday = new Date('2026-09-25T14:00:00');
+  const onWeekday = new Date('2026-09-24T14:00:00'); // 목요일
+  assert.equal(evaluateSpot(spot, onHoliday, holidays).state, 'free');
+  assert.equal(evaluateSpot(spot, onWeekday, holidays).state, 'paid');
 });

@@ -20,6 +20,10 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '&copy; OpenStreetMap · 무료주차: 공공데이터/사용자 제보',
 }).addTo(map);
 
+// 공유 링크(#m=lat,lng,z)로 들어왔으면 해당 위치로 초기 뷰 설정
+const bootHash = (() => { try { return parseHash(); } catch { return {}; } })();
+if (bootHash.m) map.setView([bootHash.m.lat, bootHash.m.lng], bootHash.m.z);
+
 // 도시 줌 이상에서만 주차 마커 표시(전국 뷰가 숫자로 뒤덮이는 것 방지)
 const MIN_MARKER_ZOOM = 11;
 // 네이버지도에서 지점명으로 열기 — 동명 주차장 구분을 위해 시·군·구를 앞에 붙여 검색
@@ -30,9 +34,32 @@ const NAVER_AT = (name, address) => {
 // chunkedLoading 사용 금지: 라이브러리의 비동기 청크는 취소가 불가능해서, 삽입 도중
 // 게이트 다운(줌아웃)·레이어 끄기로 그룹이 지도에서 빠지면 _map=null 상태로 청크가
 // 실행돼 크래시함. 대신 아래 addFreeChunked()로 세대 토큰 기반 취소 가능한 청크 삽입.
+// 클러스터 버블을 자식 상태 비율 도넛으로 — 저줌에서도 "이 지역 지금 무료/저가 비율"이 살아남
+function clusterDonut(cluster) {
+  const kids = cluster.getAllChildMarkers();
+  const n = kids.length;
+  let free = 0, low = 0, other = 0;
+  for (const m of kids) {
+    const s = m.options.spotState;
+    if (s === 'free' || s === 'partial') free++;
+    else if (s === 'low') low++;
+    else other++;
+  }
+  const sz = n < 20 ? 38 : n < 100 ? 46 : n < 1000 ? 54 : 62;
+  const segs = []; let acc = 0;
+  const add = (cnt, v) => { if (!cnt) return; const a = (acc / n) * 360, b = ((acc + cnt) / n) * 360; segs.push(`var(${v}) ${a.toFixed(1)}deg ${b.toFixed(1)}deg`); acc += cnt; };
+  add(free, '--s-free'); add(low, '--s-low'); add(other, '--s-paid');
+  const ring = segs.length ? `conic-gradient(${segs.join(',')})` : 'var(--s-paid)';
+  const label = n >= 1000 ? `${(n / 1000).toFixed(n < 10000 ? 1 : 0)}k` : String(n);
+  return L.divIcon({
+    className: 'cl-wrap',
+    html: `<div class="cl-donut" style="width:${sz}px;height:${sz}px;background:${ring}"><span>${label}</span></div>`,
+    iconSize: [sz, sz],
+  });
+}
 const freeCluster = L.markerClusterGroup({
   maxClusterRadius: 70, spiderfyOnMaxZoom: true, showCoverageOnHover: false,
-  removeOutsideVisibleBounds: true,
+  removeOutsideVisibleBounds: true, iconCreateFunction: clusterDonut,
 });
 let freeAddGen = 0; // 새 렌더가 시작되면 증가 → 진행 중이던 청크 삽입 취소
 function addFreeChunked(markers) {
@@ -49,8 +76,9 @@ function addFreeChunked(markers) {
 }
 const grayLayer = L.layerGroup();
 const npLayer = L.layerGroup();
-const layerObj = { legal_free: freeCluster, gray_zone: grayLayer, no_parking: npLayer };
-const freeVisible = () => els.lyrFree.checked && map.getZoom() >= MIN_MARKER_ZOOM;
+// 무료·저가는 같은 클러스터를 공유 → 클러스터 도넛이 지역별 무료/저가 비율을 표현. 표시 여부는 render가 필터.
+const layerObj = { legal_free: freeCluster, low_cost: freeCluster, gray_zone: grayLayer, no_parking: npLayer };
+const freeVisible = () => (els.lyrFree.checked || els.lyrLow.checked) && map.getZoom() >= MIN_MARKER_ZOOM;
 
 // store.all = 전체 스팟(공식 시드 + 사용자 제보). 서버 모드면 서버에서, 로컬 모드면 시드+localStorage.
 const store = { all: [] };
@@ -75,7 +103,7 @@ async function refreshFromServer() { store.all = await apiLoad(currentBbox()); r
 
 const $ = (id) => document.getElementById(id);
 const els = {
-  lyrFree: $('lyr-free'), lyrGray: $('lyr-gray'), lyrNp: $('lyr-np'),
+  lyrFree: $('lyr-free'), lyrLow: $('lyr-low'), lyrGray: $('lyr-gray'), lyrNp: $('lyr-np'),
   fts: [...document.querySelectorAll('.ft')],
   tmNow: $('tm-now'), tmSim: $('tm-sim'), simBox: $('sim-box'),
   simDay: $('sim-day'), simHour: $('sim-hour'), simHourLbl: $('sim-hour-lbl'),
@@ -117,8 +145,36 @@ const toISO = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, 
 
 // ── 마커 (커스텀 SVG 픽토그램) ───────────────────────────────────────────────
 // 합법무료 = 'P' 핀, 단속뜸 = 주의 핀, 주차금지 = 주차금지 표지판(P+사선).
-const MARKER_COLOR = { free: '#2f7355', partial: '#a9741f', paid: '#a8a49b', gray: '#94781f', warning: '#a5443a', unknown: '#a8a49b' };
+const MARKER_COLOR = { free: '#2f7355', partial: '#a9741f', low: '#3f6d99', paid: '#a8a49b', gray: '#94781f', warning: '#a5443a', unknown: '#a8a49b' };
 const FONT_ATTR = "font-family='Pretendard Variable',-apple-system,sans-serif";
+
+// 저가(low_cost)는 무료 규칙이 없으면 엔진이 'paid'로 판정 — 저가 표시용 'low' 상태로 승격.
+// (특기 무료창이 지금 열려 있으면 free/partial 그대로 → 오늘은 무료!)
+function spotEval(f, now) {
+  const ev = evaluateSpot(f, now, HOLIDAYS);
+  const p = f.properties;
+  if (p.category === 'low_cost' && ev.state !== 'free' && ev.state !== 'partial') {
+    const won = p.first_hour_won;
+    return { ...ev, state: 'low', label: won != null ? `저가 · 1시간 ${won.toLocaleString('ko-KR')}원` : '저가 주차', detail: lowDetail(p) };
+  }
+  return ev;
+}
+function lowDetail(p) {
+  const fs = p.fee_structure || {};
+  const bits = [];
+  if (fs.base_time > 0 && fs.base_fee >= 0) bits.push(`기본 ${fs.base_time}분 ${fs.base_fee.toLocaleString('ko-KR')}원`);
+  if (fs.unit_time > 0 && fs.unit_fee >= 0) bits.push(`추가 ${fs.unit_time}분당 ${fs.unit_fee.toLocaleString('ko-KR')}원`);
+  return bits.join(' · ') || '유료(저가)';
+}
+// 무료 종료까지 남은 분(자정 래핑). 0<left<=SOON_MIN 이면 '곧 유료'.
+const SOON_MIN = 45;
+function soonLeft(ev, now) {
+  if (ev.until == null) return null;
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  let left = ev.until - nowMin;
+  if (left < 0) left += 1440;
+  return (left > 0 && left <= SOON_MIN) ? left : null;
+}
 
 function markerHtml(state, isUser) {
   const badge = isUser ? `<circle cx='23' cy='6.5' r='4' fill='#3b6cc7' stroke='#fff' stroke-width='1.6'/>` : '';
@@ -155,12 +211,12 @@ const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': 
 function rulesText(rules) {
   if (!rules || !rules.length) return '<span class="muted">무료 규칙 미등록</span>';
   return rules.map((r) => {
-    const day = r.day_type || '전일';
-    const win = r.start || r.end ? `${r.start || '00:00'}~${r.end || '24:00'}` : '종일';
+    const day = esc(r.day_type || '전일');
+    const win = r.start || r.end ? `${esc(r.start || '00:00')}~${esc(r.end || '24:00')}` : '종일';
     let fee;
     if (r.fee_type === '상시무료' || r.fee_type === '시간대무료') fee = '무료';
-    else if (r.fee_type === '최초N분무료') fee = `최초 ${r.first_free_minutes}분 무료`;
-    else fee = `유료${r.fee_info ? ' (' + r.fee_info + ')' : ''}`;
+    else if (r.fee_type === '최초N분무료') fee = `최초 ${esc(r.first_free_minutes)}분 무료`;
+    else fee = `유료${r.fee_info ? ' (' + esc(r.fee_info) + ')' : ''}`;
     return `· ${day} ${win} — ${fee}`;
   }).join('<br>');
 }
@@ -192,15 +248,120 @@ function timelineHtml(p, now) {
     `<div class="tl-hours"><span>0시</span><span>6시</span><span>12시</span><span>18시</span><span>24시</span></div></div>`;
 }
 
+// ── 즐겨찾기(localStorage) ────────────────────────────────────────────────────
+const FAV_KEY = 'pfree.favorites.v1';
+const loadFavs = () => { try { return JSON.parse(localStorage.getItem(FAV_KEY) || '[]'); } catch { return []; } };
+const saveFavs = (a) => { try { localStorage.setItem(FAV_KEY, JSON.stringify(a)); } catch {} };
+let favIds = new Set(loadFavs().map((x) => x.id));
+const isFav = (id) => favIds.has(id);
+// 열려 있는 팝업의 ★ 버튼도 현재 상태에 맞게 동기화(목록 ✕/토글 후 desync 방지)
+function refreshFavButtons(id) {
+  const on = isFav(id);
+  const sel = (window.CSS && CSS.escape) ? CSS.escape(id) : id.replace(/["\\]/g, '\\$&');
+  document.querySelectorAll(`button[data-fav-id="${sel}"]`).forEach((b) => {
+    b.classList.toggle('on', on);
+    const path = b.querySelector('path'); if (path) path.setAttribute('fill', on ? 'currentColor' : 'none');
+  });
+}
+function toggleFav(f) {
+  if (!f) return;
+  const id = f.properties.id;
+  let favs = loadFavs();
+  if (favIds.has(id)) { favs = favs.filter((x) => x.id !== id); favIds.delete(id); }
+  else {
+    const [lng, lat] = f.geometry.coordinates;
+    favs.push({ id, name: f.properties.name, lat, lng, category: f.properties.category, address: f.properties.address || '' });
+    favIds.add(id);
+  }
+  saveFavs(favs); renderFavs(); refreshFavButtons(id);
+}
+function renderFavs() {
+  const box = $('favs'); if (!box) return;
+  const favs = loadFavs();
+  if (!favs.length) { box.innerHTML = `<div class="near-empty">팝업의 <b>★</b> 를 눌러 자주 가는 무료·저가 주차를 저장하세요.</div>`; return; }
+  const now = refDate();
+  // 즐겨찾기 소수만 해석하면 되므로 전체 피처 Map을 만들지 않고 해당 id만 단일 패스로 수집
+  const favSet = new Set(favs.map((x) => x.id));
+  const byId = new Map();
+  for (const f of allFeatures()) { if (favSet.has(f.properties.id)) byId.set(f.properties.id, f); }
+  box.innerHTML = `<div class="near-list">${favs.map((fav) => {
+    const f = byId.get(fav.id);
+    const ev = f ? spotEval(f, now) : { state: 'unknown', label: '' };
+    const dist = userLoc ? ` · ${fmtDist(distM(userLoc, { lat: fav.lat, lng: fav.lng }))}` : '';
+    return `<div class="near-item fav-item" data-id="${esc(fav.id)}" data-ll="${fav.lat},${fav.lng}"><span class="dot ${ev.state}"></span>` +
+      `<div class="ni-main"><div class="ni-name">${esc(fav.name)}</div>` +
+      `<div class="ni-sub">${esc(ev.label || fav.address || '')}${dist}</div></div>` +
+      `<button class="fav-x" data-unfav="${esc(fav.id)}" title="즐겨찾기 해제" aria-label="즐겨찾기 해제">✕</button></div>`;
+  }).join('')}</div>`;
+}
+
+// ── 공유 딥링크(#s=id&m=lat,lng,z) ────────────────────────────────────────────
+function parseHash() {
+  const out = {};
+  for (const part of location.hash.replace(/^#/, '').split('&')) {
+    const [k, v] = part.split('=');
+    if (k === 'm' && v) { const [lat, lng, z] = v.split(',').map(Number); if (isFinite(lat) && isFinite(lng)) out.m = { lat, lng, z: isFinite(z) ? z : 15 }; }
+    else if (k === 's' && v) out.s = decodeURIComponent(v);
+  }
+  return out;
+}
+let hashTimer = null, hashSpotId = null;
+function updateHash() {
+  const c = map.getCenter();
+  const m = `m=${c.lat.toFixed(5)},${c.lng.toFixed(5)},${map.getZoom()}`;
+  history.replaceState(null, '', `#${hashSpotId ? `s=${encodeURIComponent(hashSpotId)}&` : ''}${m}`);
+}
+function shareUrl(f) {
+  const [lng, lat] = f.geometry.coordinates;
+  return `${location.origin}${location.pathname}#s=${encodeURIComponent(f.properties.id)}&m=${lat.toFixed(5)},${lng.toFixed(5)},${Math.max(map.getZoom(), 16)}`;
+}
+let toastTimer = null;
+function toast(msg) {
+  let t = $('toast');
+  if (!t) { t = document.createElement('div'); t.id = 'toast'; document.body.appendChild(t); }
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+async function shareSpot(f) {
+  if (!f) return;
+  hashSpotId = f.properties.id; updateHash();
+  const url = shareUrl(f);
+  try {
+    if (navigator.share) { await navigator.share({ title: f.properties.name, url }); return; }
+    await navigator.clipboard.writeText(url); toast('링크를 복사했습니다');
+  } catch { try { await navigator.clipboard.writeText(url); toast('링크를 복사했습니다'); } catch { toast('링크 복사 실패'); } }
+}
+function openSpotPopup(f) {
+  const [lng, lat] = f.geometry.coordinates;
+  L.popup({ offset: [0, -26] }).setLatLng([lat, lng]).setContent(popupHtml(f.properties, spotEval(f, refDate()), lng, lat)).openOn(map);
+  hashSpotId = f.properties.id; updateHash();
+}
+
 function popupHtml(p, ev, lng, lat) {
+  const soon = soonLeft(ev, refDate());
+  const soonBadge = soon != null ? `<span class="soon">무료 ${soon}분 후 종료</span>` : '';
   let body = `<div class="pp"><div class="name">${esc(p.name)}</div>` +
-    `<span class="state"><span class="dot ${ev.state}"></span>${ev.label}</span>` +
+    `<span class="state"><span class="dot ${ev.state}"></span>${ev.label}</span>${soonBadge}` +
     `<div class="row">${esc(ev.detail || '')}</div>`;
+  const isPark = p.category === 'legal_free' || p.category === 'low_cost';
   if (p.category === 'legal_free') {
     if (p.address) body += `<div class="muted">${esc(p.address)}</div>`;
-    body += `<div class="row">${p.num_spaces ? '주차면 ' + p.num_spaces + '면 · ' : ''}${esc(p.kind || '')} · ${esc(p.free_type || '')}</div>`;
+    body += `<div class="row">${Number(p.num_spaces) > 0 ? '주차면 ' + Number(p.num_spaces) + '면 · ' : ''}${esc(p.kind || '')} · ${esc(p.free_type || '')}</div>`;
     body += timelineHtml(p, refDate());
     body += `<div class="row" style="margin-top:7px">${rulesText(p.free_rules)}</div>`;
+  } else if (p.category === 'low_cost') {
+    if (p.address) body += `<div class="muted">${esc(p.address)}</div>`;
+    if (Number.isFinite(p.first_hour_won)) body += `<div class="fee-hi">1시간 예상 <b>${Number(p.first_hour_won).toLocaleString('ko-KR')}원</b><span class="fee-tag">저가</span></div>`;
+    body += `<div class="row">${Number(p.num_spaces) > 0 ? '주차면 ' + Number(p.num_spaces) + '면 · ' : ''}${esc(p.kind || '')} · ${esc(lowDetail(p))}</div>`;
+    const fs = p.fee_structure || {};
+    if (fs.daily_fee > 0) body += `<div class="muted">1일권 ${fs.daily_fee.toLocaleString('ko-KR')}원${fs.monthly_fee > 0 ? ` · 월정기 ${fs.monthly_fee.toLocaleString('ko-KR')}원` : ''}</div>`;
+    // 특기 무료창(공휴일/야간 등)이 있으면 타임라인+규칙으로 "언제 무료인지" 노출
+    if ((p.free_rules || []).some((r) => r.fee_type !== '유료')) {
+      body += timelineHtml(p, refDate());
+      body += `<div class="row" style="margin-top:7px">${rulesText(p.free_rules)}</div>`;
+    }
+  }
+  if (isPark) {
     if (p.hours) body += `<div class="muted" style="margin-top:4px">운영 ${esc(p.hours)}</div>`;
     if (p.tel) {
       body += `<div class="muted">문의 <a class="tel" href="tel:${esc(String(p.tel).replace(/[^0-9+\-]/g, ''))}">${esc(p.tel)}</a>` +
@@ -217,10 +378,16 @@ function popupHtml(p, ev, lng, lat) {
     const r = p.risk || {};
     body += `<div class="warnbox"><b>주정차 절대금지</b> — ${esc(r.zone_type || '')}<br>과태료 ${esc(r.fine || '부과')}${r.citizen_report ? ' · 주민신고제' : ''}${r.safety_critical ? ' · 안전 위협' : ''}<br>${esc(p.note || '')}</div>`;
   }
-  // 네이버지도에서 해당 지점 열기(키 불필요, 앱 설치 시 앱으로 연결)
-  if (p.category === 'legal_free') {
-    body += `<div class="pp-actions"><a class="btn small" target="_blank" rel="noopener" href="${NAVER_AT(p.name, p.address)}">` +
-      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><path d="M12 2C8 2 5 5 5 9c0 5 7 13 7 13s7-8 7-13c0-4-3-7-7-7z"/><circle cx="12" cy="9" r="2.4"/></svg>네이버지도에서 보기</a></div>`;
+  // 무료·저가: 네이버지도 지점 열기 + 즐겨찾기 + 링크 공유
+  if (isPark) {
+    const star = isFav(p.id);
+    body += `<div class="pp-actions">` +
+      `<a class="btn small" target="_blank" rel="noopener" href="${NAVER_AT(p.name, p.address)}">` +
+      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><path d="M12 2C8 2 5 5 5 9c0 5 7 13 7 13s7-8 7-13c0-4-3-7-7-7z"/><circle cx="12" cy="9" r="2.4"/></svg>네이버지도</a>` +
+      `<button class="btn small icon-only ${star ? 'on' : ''}" data-fav-id="${esc(p.id)}" title="즐겨찾기" aria-label="즐겨찾기">` +
+      `<svg viewBox="0 0 24 24" fill="${star ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" style="width:14px;height:14px"><path d="M12 3.2l2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 22.3l-5.2-2.7 1-5.8-4.2-4.1 5.8-.8z"/></svg></button>` +
+      `<button class="btn small icon-only" data-share-id="${esc(p.id)}" title="링크 공유" aria-label="링크 공유">` +
+      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><circle cx="18" cy="5" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="19" r="2.6"/><path d="M8.3 10.7l7.4-4.3M8.3 13.3l7.4 4.3"/></svg></button></div>`;
   }
   if (p.editable) {
     body += `<div class="pp-actions"><button class="btn small" data-act="edit" data-id="${esc(p.id)}">편집</button>` +
@@ -234,7 +401,8 @@ function popupHtml(p, ev, lng, lat) {
 // 사용자 제보(crowd)·단속뜸·주차금지 레이어는 유지.
 function allFeatures() {
   if (!govFeatures.length) return store.all;
-  const kept = store.all.filter((f) => !(f.properties.category === 'legal_free' && f.properties.source === 'official'));
+  // 업로드한 최신 CSV가 공식 무료·저가를 대체(중복 방지). 사용자 제보·단속뜸·주차금지는 유지.
+  const kept = store.all.filter((f) => !((f.properties.category === 'legal_free' || f.properties.category === 'low_cost') && f.properties.source === 'official'));
   return kept.concat(govFeatures);
 }
 function layerFeatures(cat) {
@@ -251,28 +419,30 @@ function render() {
   const activeFts = new Set(els.fts.filter((c) => c.checked).map((c) => c.value));
   const onlyFree = els.onlyFree.checked;
   freeCluster.clearLayers(); grayLayer.clearLayers(); npLayer.clearLayers();
-  const count = { legal_free: 0, gray_zone: 0, no_parking: 0 }; let nowFree = 0;
+  const count = { legal_free: 0, low_cost: 0, gray_zone: 0, no_parking: 0 }; let nowFree = 0, soonCnt = 0;
   freeNowFeatures = [];
 
-  for (const cat of ['legal_free', 'gray_zone', 'no_parking']) {
-    const checked = { legal_free: els.lyrFree, gray_zone: els.lyrGray, no_parking: els.lyrNp }[cat].checked;
+  for (const cat of ['legal_free', 'low_cost', 'gray_zone', 'no_parking']) {
+    const checked = { legal_free: els.lyrFree, low_cost: els.lyrLow, gray_zone: els.lyrGray, no_parking: els.lyrNp }[cat].checked;
     if (!checked) continue;
-    // 합법무료는 마커가 많아 도시 줌 이상에서만 그림(개수는 항상 집계)
-    const draw = cat === 'legal_free' ? (map.getZoom() >= MIN_MARKER_ZOOM) : true;
+    const isPark = cat === 'legal_free' || cat === 'low_cost';
+    // 무료·저가는 마커가 많아 도시 줌 이상에서만 그림(개수는 항상 집계)
+    const draw = isPark ? (map.getZoom() >= MIN_MARKER_ZOOM) : true;
     const batch = [];
     for (const f of layerFeatures(cat)) {
       const p = f.properties;
       if (cat === 'legal_free' && p.free_type && !activeFts.has(p.free_type)) continue;
-      const ev = evaluateSpot(f, now, HOLIDAYS);
+      const ev = spotEval(f, now);
       const isFreeNow = ev.state === 'free' || ev.state === 'partial';
-      if (cat === 'legal_free' && isFreeNow) freeNowFeatures.push({ f, ev });
-      if (cat === 'legal_free' && onlyFree && !isFreeNow) continue;
-      count[cat]++; if (cat === 'legal_free' && isFreeNow) nowFree++;
+      if (isPark && isFreeNow) freeNowFeatures.push({ f, ev });
+      if (isPark && onlyFree && !isFreeNow) continue;
+      count[cat]++;
+      if (isPark && isFreeNow) { nowFree++; if (soonLeft(ev, now) != null) soonCnt++; }
       if (!draw) continue;
       const [lng, lat] = f.geometry.coordinates;
       // 팝업은 지연 생성(열 때 계산) — 타임라인 샘플링·HTML 생성을 마커 수만큼 반복하지 않음
-      batch.push(L.marker([lat, lng], { icon: pinIcon(ev.state, p.editable) })
-        .bindPopup(() => popupHtml(p, evaluateSpot(f, refDate(), HOLIDAYS), lng, lat)));
+      batch.push(L.marker([lat, lng], { icon: pinIcon(ev.state, p.editable), spotState: ev.state, spotCat: cat })
+        .bindPopup(() => popupHtml(p, spotEval(f, refDate()), lng, lat)));
     }
     if (batch.length) {
       const layer = layerObj[cat];
@@ -282,10 +452,12 @@ function render() {
   }
 
   const t = now.toLocaleString('ko-KR', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+  const gateNote = freeVisible() ? '' : ' · 지도 확대 시 표시';
   els.statsContent.innerHTML =
     `<div class="now-num ${nowFree ? 'has' : ''}"><span class="mono-num">${nowFree.toLocaleString()}</span><small>곳 지금 무료</small></div>` +
-    `<div class="now-label">합법 무료 ${count.legal_free.toLocaleString()}곳${freeVisible() ? '' : ' · 지도 확대 시 표시'}</div>` +
+    `<div class="now-label">무료 ${count.legal_free.toLocaleString()}곳 · <span class="lc">저가 ${count.low_cost.toLocaleString()}곳</span>${gateNote}</div>` +
     `<div class="breakdown">` +
+      (soonCnt ? `<span class="bk"><span class="dot partial"></span>곧 유료 <b>${soonCnt}</b></span>` : '') +
       `<span class="bk"><span class="dot gray"></span>단속뜸 <b>${count.gray_zone}</b></span>` +
       `<span class="bk"><span class="dot warning"></span>주차금지 <b>${count.no_parking}</b></span>` +
       `<span class="bk">내 제보 <b>${crowdSpots().length}</b></span>` +
@@ -297,6 +469,7 @@ function render() {
   els.mineCount.innerHTML = `${mine ? `제보 ${mine}곳` : '아직 제보가 없습니다'}<br>${mode}`;
 
   renderNearby();
+  renderFavs();
   syncLayers();
 }
 
@@ -318,8 +491,10 @@ function renderNearby() {
     .sort((a, b) => a.d - b.d)
     .slice(0, 8);
   if (!items.length) { els.near.innerHTML = `<div class="near-empty">주변에 ‘지금 무료’ 스팟이 없습니다. 지도를 이동하거나 시각을 바꿔보세요.</div>`; return; }
+  const nowRef = refDate();
   els.near.innerHTML = `<div class="near-list">${items.map((it, i) => {
-    const until = it.ev.until != null ? ` · ${fmtHM(it.ev.until)}까지` : '';
+    const soon = soonLeft(it.ev, nowRef);
+    const until = soon != null ? ` · <span class="soon-t">${soon}분 후 종료</span>` : (it.ev.until != null ? ` · ${fmtHM(it.ev.until)}까지` : '');
     return `<div class="near-item" data-i="${i}"><span class="dot ${it.ev.state}"></span>` +
       `<div class="ni-main"><div class="ni-name">${esc(it.f.properties.name)}</div>` +
       `<div class="ni-sub">${it.ev.label}${until} · 도보 ${walkMin(it.d)}분</div></div>` +
@@ -336,7 +511,7 @@ function syncLayers() {
   els.lyrGray.checked ? map.addLayer(grayLayer) : map.removeLayer(grayLayer);
   els.lyrNp.checked ? map.addLayer(npLayer) : map.removeLayer(npLayer);
   const hint = $('zoom-hint');
-  if (hint) hint.classList.toggle('hidden', !(els.lyrFree.checked && map.getZoom() < MIN_MARKER_ZOOM));
+  if (hint) hint.classList.toggle('hidden', !((els.lyrFree.checked || els.lyrLow.checked) && map.getZoom() < MIN_MARKER_ZOOM));
 }
 
 // ── 편집기 ──────────────────────────────────────────────────────────────────
@@ -517,7 +692,7 @@ async function importUser(file) {
 }
 
 // ── 이벤트 ──────────────────────────────────────────────────────────────────
-[els.lyrFree, els.lyrGray, els.lyrNp].forEach((el) => el.addEventListener('change', () => { syncLayers(); render(); }));
+[els.lyrFree, els.lyrLow, els.lyrGray, els.lyrNp].forEach((el) => el.addEventListener('change', () => { syncLayers(); render(); }));
 els.fts.forEach((c) => c.addEventListener('change', render));
 els.onlyFree.addEventListener('change', render);
 [els.tmNow, els.tmSim].forEach((el) => el.addEventListener('change', () => { els.simBox.classList.toggle('on', els.tmSim.checked); render(); }));
@@ -568,7 +743,7 @@ function localSearch(q) {
   const scored = [];
   for (const f of allFeatures()) {
     const p = f.properties;
-    if (p.category !== 'legal_free') continue;
+    if (p.category !== 'legal_free' && p.category !== 'low_cost') continue;
     const name = (p.name || '').toLowerCase();
     const addr = (p.address || '').toLowerCase();
     let s = 0;
@@ -603,8 +778,10 @@ function renderResults(items, tip) {
     }
     const p = it.properties, [lng, lat] = it.geometry.coordinates;
     const d = userLoc ? fmtDist(distM(userLoc, { lat, lng })) : '';
-    return `<div class="q-item" data-i="${i}"><span class="dot free"></span>` +
-      `<div class="qi-main"><div class="qi-name">${esc(p.name)}</div><div class="qi-sub">${esc(p.address || p.free_type || '')}</div></div>` +
+    const st = spotEval(it, refDate()).state;
+    const sub = p.category === 'low_cost' && p.first_hour_won != null ? `저가 · 1시간 ${p.first_hour_won.toLocaleString('ko-KR')}원` : (p.address || p.free_type || '');
+    return `<div class="q-item" data-i="${i}"><span class="dot ${st}"></span>` +
+      `<div class="qi-main"><div class="qi-name">${esc(p.name)}</div><div class="qi-sub">${esc(sub)}</div></div>` +
       (d ? `<span class="qi-dist">${d}</span>` : '') + `</div>`;
   }).join('') + (tip ? `<div class="q-tip">${tip}</div>` : '');
   qRes.classList.remove('hidden');
@@ -630,7 +807,8 @@ function goToResult(it) {
   hideResults(); qEl.blur();
   if (it.place) { map.flyTo([it.lat, it.lng], Math.max(map.getZoom(), 14)); return; }
   const [lng, lat] = it.geometry.coordinates;
-  const ev = evaluateSpot(it, refDate(), HOLIDAYS);
+  const ev = spotEval(it, refDate());
+  hashSpotId = it.properties.id;
   // flyTo 시간은 거리 비례(원거리 수 초) — 고정 지연 대신 비행 종료(moveend)에 팝업 오픈
   let opened = false;
   const open = () => {
@@ -713,10 +891,11 @@ async function loadGovFile(file) {
     }
     govFeatures = res.features;
     if (!els.lyrFree.checked) els.lyrFree.checked = true;
+    if (!els.lyrLow.checked) els.lyrLow.checked = true;
     syncLayers(); render();
     const b = L.latLngBounds(govFeatures.map((f) => [f.geometry.coordinates[1], f.geometry.coordinates[0]]));
     if (b.isValid()) map.fitBounds(b, { padding: [30, 30] });
-    status.innerHTML = `<span class="mode server">전국 무료주차 ${res.features.length.toLocaleString()}곳 불러옴</span> · 이 세션 표시 (원본 ${res.stats.total.toLocaleString()}행)`;
+    status.innerHTML = `<span class="mode server">무료 ${(res.stats.free || 0).toLocaleString()}곳 · 저가 ${(res.stats.lowCost || 0).toLocaleString()}곳 불러옴</span> · 이 세션 표시 (원본 ${res.stats.total.toLocaleString()}행)`;
   } catch (e) {
     status.textContent = '읽기 실패: ' + e.message;
   }
@@ -769,6 +948,30 @@ document.addEventListener('click', (e) => {
   else if (btn.dataset.act === 'del') { if (confirm('이 제보를 삭제할까요?')) removeSpot(f.properties.id); }
 });
 
+// 팝업 즐겨찾기·공유 (이벤트 위임)
+document.addEventListener('click', (e) => {
+  const favBtn = e.target.closest('button[data-fav-id]');
+  if (favBtn) {
+    const f = allFeatures().find((x) => x.properties.id === favBtn.dataset.favId);
+    if (f) { toggleFav(f); toast(isFav(f.properties.id) ? '즐겨찾기에 추가' : '즐겨찾기 해제'); }
+    return;
+  }
+  const shareBtn = e.target.closest('button[data-share-id]');
+  if (shareBtn) { const f = allFeatures().find((x) => x.properties.id === shareBtn.dataset.shareId); if (f) shareSpot(f); }
+});
+
+// 즐겨찾기 목록: 항목 클릭=이동 / ✕=해제
+$('favs').addEventListener('click', (e) => {
+  const x = e.target.closest('button[data-unfav]');
+  if (x) { e.stopPropagation(); const id = x.dataset.unfav; favIds.delete(id); saveFavs(loadFavs().filter((f) => f.id !== id)); renderFavs(); refreshFavButtons(id); return; }
+  const item = e.target.closest('.fav-item');
+  if (item) { const [lat, lng] = item.dataset.ll.split(',').map(Number); map.flyTo([lat, lng], Math.max(map.getZoom(), 16)); const f = allFeatures().find((y) => y.properties.id === item.dataset.id); if (f) map.once('moveend', () => openSpotPopup(f)); }
+});
+
+// 지도 이동 시 공유용 URL 해시 갱신(디바운스)
+map.on('moveend', () => { clearTimeout(hashTimer); hashTimer = setTimeout(updateHash, 400); });
+map.on('popupclose', () => { hashSpotId = null; });
+
 // ── 로드 ────────────────────────────────────────────────────────────────────
 let bboxTimer = null;
 async function load() {
@@ -811,6 +1014,17 @@ async function load() {
     store.all = [...base.filter((f) => !userIds.has(f.properties.id) && !tombs.has(f.properties.id)), ...user];
   }
   syncLayers(); render();
+  // 공유 링크(#s=id)로 들어왔으면 해당 스팟 팝업 열기(중복 오픈 방지)
+  if (bootHash.s) {
+    const f = allFeatures().find((x) => x.properties.id === bootHash.s);
+    if (f) {
+      const [lng, lat] = f.geometry.coordinates;
+      let opened = false;
+      const go = () => { if (opened) return; opened = true; openSpotPopup(f); };
+      map.setView([lat, lng], Math.max(map.getZoom(), 16));
+      map.once('moveend', go); setTimeout(go, 600);
+    }
+  }
 }
 
 load().catch((e) => {

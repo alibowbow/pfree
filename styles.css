@@ -26,6 +26,7 @@
 
   --s-free: #2f7355;
   --s-partial: #a9741f;
+  --s-low: #3f6d99;
   --s-paid: #a8a49b;
   --s-gray: #94781f;
   --s-warn: #a5443a;
@@ -49,7 +50,7 @@
   --accent: #5f9b7d;
   --accent-hover: #6fab8c;
   --accent-wash: rgba(95, 155, 125, .13);
-  --s-free: #5f9b7d; --s-partial: #c99a52; --s-paid: #8b877e; --s-gray: #bd9a45; --s-warn: #c76a60;
+  --s-free: #5f9b7d; --s-partial: #c99a52; --s-low: #6f9cc4; --s-paid: #8b877e; --s-gray: #bd9a45; --s-warn: #c76a60;
   --shadow-pop: 0 10px 34px rgba(0, 0, 0, .55);
   --shadow-panel: -1px 0 0 var(--line);
 }
@@ -60,7 +61,7 @@
     --ink: #e9e6df; --ink-2: #a3a099; --ink-3: #6f6c64;
     --line: rgba(255, 255, 255, .075); --line-2: rgba(255, 255, 255, .13);
     --accent: #5f9b7d; --accent-hover: #6fab8c; --accent-wash: rgba(95, 155, 125, .13);
-    --s-free: #5f9b7d; --s-partial: #c99a52; --s-paid: #8b877e; --s-gray: #bd9a45; --s-warn: #c76a60;
+    --s-free: #5f9b7d; --s-partial: #c99a52; --s-low: #6f9cc4; --s-paid: #8b877e; --s-gray: #bd9a45; --s-warn: #c76a60;
     --shadow-pop: 0 10px 34px rgba(0, 0, 0, .55);
   }
 }
@@ -202,7 +203,7 @@ body.panel-collapsed #panel-tab svg { transform: rotate(180deg); }
 .chk input[type=checkbox], .chk input[type=radio] { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; margin: 0; }
 .only-free { margin-top: 4px; }
 .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex: 0 0 auto; }
-.dot.free { background: var(--s-free); } .dot.partial { background: var(--s-partial); }
+.dot.free { background: var(--s-free); } .dot.partial { background: var(--s-partial); } .dot.low { background: var(--s-low); }
 .dot.paid { background: var(--s-paid); } .dot.gray { background: var(--s-gray); } .dot.warning { background: var(--s-warn); } .dot.unknown { background: var(--s-paid); }
 
 /* chips */
@@ -228,6 +229,8 @@ body.panel-collapsed #panel-tab svg { transform: rotate(180deg); }
 .near-item .ni-name { font-size: 13px; font-weight: 550; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color .14s; }
 .near-item .ni-sub { font-size: 11px; color: var(--ink-2); margin-top: 2px; }
 .near-item .ni-dist { font-size: 12px; font-weight: 600; color: var(--ink); white-space: nowrap; letter-spacing: -0.01em; }
+.fav-item .fav-x { border: none; background: none; color: var(--ink-3); cursor: pointer; font-size: 13px; line-height: 1; padding: 4px; border-radius: 4px; flex: 0 0 auto; }
+.fav-item .fav-x:hover { color: var(--s-warn); background: color-mix(in srgb, var(--s-warn) 8%, transparent); }
 
 /* ── buttons ─────────────────────────────────────────────────────────────── */
 .btn {
@@ -293,13 +296,21 @@ a.btn { text-decoration: none; }
 .mk svg { display: block; filter: drop-shadow(0 2px 3px rgba(28, 26, 22, .34)); }
 :root[data-theme='dark'] .mk svg { filter: drop-shadow(0 2px 4px rgba(0, 0, 0, .55)); }
 .marker-cluster { background: transparent !important; }
-.marker-cluster div {
-  width: 32px !important; height: 32px !important; margin: 4px 0 0 4px !important;
-  background: var(--accent) !important; color: #fff !important;
-  font: 600 12px/32px var(--font) !important; text-align: center; border-radius: 50%;
-  box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 16%, transparent);
+/* 클러스터 = 자식 상태 비율 도넛(무료/저가/유료). conic-gradient 링 + 가운데 총개수 */
+.cl-wrap { background: transparent; }
+.cl-donut {
+  display: grid; place-items: center; border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(28, 26, 22, .28); position: relative;
 }
-:root[data-theme='dark'] .marker-cluster div { color: #14201b !important; }
+.cl-donut::before {
+  content: ''; position: absolute; inset: 22%; border-radius: 50%;
+  background: var(--surface); box-shadow: inset 0 0 0 1px var(--line);
+}
+.cl-donut span {
+  position: relative; font: 650 12px/1 var(--font); color: var(--ink);
+  letter-spacing: -0.02em; font-variant-numeric: tabular-nums;
+}
+:root[data-theme='dark'] .cl-donut { box-shadow: 0 1px 4px rgba(0, 0, 0, .5); }
 .place-pin svg { width: 26px; height: 26px; filter: drop-shadow(0 2px 3px rgba(0,0,0,.35)); cursor: grab; display: block; }
 
 /* ── popup ───────────────────────────────────────────────────────────────── */
@@ -321,8 +332,19 @@ a.btn { text-decoration: none; }
 .pp .badge .dot { width: 6px; height: 6px; }
 .pp-actions { display: flex; gap: 7px; margin-top: 12px; }
 .pp-actions .btn { flex: 1; }
+.pp-actions .btn.icon-only { flex: 0 0 auto; width: 34px; padding: 0; display: grid; place-items: center; }
+.pp-actions .btn.icon-only.on { color: var(--s-partial); border-color: color-mix(in srgb, var(--s-partial) 45%, var(--line-2)); }
 .pp .tel { color: var(--accent); font-weight: 600; text-decoration: none; }
 .pp .tel:hover { text-decoration: underline; }
+/* 곧 유료 배지 */
+.pp .soon { display: inline-block; margin: 0 0 9px 6px; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; color: #fff; background: var(--s-partial); }
+.soon-t { color: var(--s-partial); font-weight: 600; }
+/* 저가 요금 하이라이트 */
+.pp .fee-hi { display: flex; align-items: baseline; gap: 8px; margin: 6px 0 2px; font-size: 12.5px; color: var(--ink-2); }
+.pp .fee-hi b { font-size: 16px; font-weight: 700; color: var(--ink); letter-spacing: -0.02em; }
+.pp .fee-tag { margin-left: auto; font-size: 10.5px; font-weight: 650; color: var(--s-low); border: 1px solid color-mix(in srgb, var(--s-low) 35%, transparent); border-radius: 4px; padding: 1px 6px; }
+/* 저가 개수(통계) */
+#stats .now-label .lc { color: var(--s-low); font-weight: 600; }
 
 /* 24시간 무료 타임라인 */
 .tl-wrap { margin-top: 10px; }
@@ -425,3 +447,12 @@ a.btn { text-decoration: none; }
 /* map tiles: tone to match paper/ink palette */
 .leaflet-tile { filter: saturate(.82) brightness(1.02) sepia(.10) hue-rotate(-6deg); }
 :root[data-theme='dark'] .leaflet-tile { filter: brightness(.8) contrast(1.05) saturate(.78) sepia(.12) hue-rotate(-8deg); }
+
+/* 토스트(링크 복사 등) */
+#toast {
+  position: fixed; left: 50%; bottom: 34px; transform: translate(-50%, 12px);
+  background: var(--ink); color: var(--paper); font-size: 12.5px; font-weight: 550;
+  padding: 9px 16px; border-radius: 999px; box-shadow: var(--shadow-pop);
+  opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; z-index: 1200;
+}
+#toast.show { opacity: 1; transform: translate(-50%, 0); }

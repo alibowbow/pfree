@@ -67,13 +67,18 @@ async function fromApi() {
 }
 
 function write(features, stats) {
+  const low = features.filter((f) => f.properties.category === 'low_cost').length;
   const fc = {
     type: 'FeatureCollection',
-    meta: { layer: 'legal_free', source: '15012896', real: true, count: features.length },
+    meta: {
+      layer: 'legal_free+low_cost', source: '15012896', real: true,
+      count: features.length, free: features.length - low, low_cost: low,
+    },
     features,
   };
   writeFileSync(OUT, JSON.stringify(fc));
-  console.log(`\n총 ${stats.total}행 → 무료 ${stats.free}곳 → 좌표유효 ${stats.kept}곳 저장`);
+  console.log(`\n총 ${stats.total}행 → 무료 ${stats.free}곳 · 저가 ${stats.lowCost}곳 → 좌표유효 ${stats.kept}곳 저장`);
+  console.log(`  (저장된 Feature: 무료 ${features.length - low}곳 + 저가 ${low}곳)`);
   if (stats.badCoord) console.log(`  (좌표 누락/범위밖 ${stats.badCoord}곳 제외)`);
   console.log(`✅ ${OUT}`);
   console.log('   앱/서버 재시작 시 이 실데이터가 시드 대신 자동 로드됩니다.');
