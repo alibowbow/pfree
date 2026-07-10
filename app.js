@@ -148,21 +148,26 @@ const toISO = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, 
 const MARKER_COLOR = { free: '#2f7355', partial: '#a9741f', low: '#3f6d99', paid: '#a8a49b', gray: '#94781f', warning: '#a5443a', unknown: '#a8a49b' };
 const FONT_ATTR = "font-family='Pretendard Variable',-apple-system,sans-serif";
 
-// 저가(low_cost)는 무료 규칙이 없으면 엔진이 'paid'로 판정 — 저가 표시용 'low' 상태로 승격.
-// (특기 무료창이 지금 열려 있으면 free/partial 그대로 → 오늘은 무료!)
+// 저가(low_cost)는 실제 무료창(요일·시간대)이 열려 있을 때만 'free' — 그 외(최초N분
+// 그레이스 포함)는 전부 'low' 로 표시한다. "최초 N분 무료"는 무료로 분류하지 않는 정책.
 function spotEval(f, now) {
   const ev = evaluateSpot(f, now, HOLIDAYS);
   const p = f.properties;
-  if (p.category === 'low_cost' && ev.state !== 'free' && ev.state !== 'partial') {
+  if (p.category === 'low_cost' && ev.state !== 'free') {
     const won = p.first_hour_won;
-    return { ...ev, state: 'low', label: won != null ? `저가 · 1시간 ${won.toLocaleString('ko-KR')}원` : '저가 주차', detail: lowDetail(p) };
+    const grace = (p.free_rules || []).find((r) => r.fee_type === '최초N분무료');
+    const label = won === 0 && grace ? `저가 · 최초 ${grace.first_free_minutes}분 무료`
+      : Number.isFinite(won) ? `저가 · 1시간 ${won.toLocaleString('ko-KR')}원` : '저가 주차';
+    return { ...ev, state: 'low', label, detail: lowDetail(p) };
   }
   return ev;
 }
 function lowDetail(p) {
   const fs = p.fee_structure || {};
   const bits = [];
-  if (fs.base_time > 0 && fs.base_fee >= 0) bits.push(`기본 ${fs.base_time}분 ${fs.base_fee.toLocaleString('ko-KR')}원`);
+  const grace = (p.free_rules || []).find((r) => r.fee_type === '최초N분무료');
+  if (grace) bits.push(`최초 ${grace.first_free_minutes}분 무료`);
+  else if (fs.base_time > 0 && fs.base_fee >= 0) bits.push(`기본 ${fs.base_time}분 ${fs.base_fee.toLocaleString('ko-KR')}원`);
   if (fs.unit_time > 0 && fs.unit_fee >= 0) bits.push(`추가 ${fs.unit_time}분당 ${fs.unit_fee.toLocaleString('ko-KR')}원`);
   return bits.join(' · ') || '유료(저가)';
 }
@@ -351,13 +356,15 @@ function popupHtml(p, ev, lng, lat) {
     body += `<div class="row" style="margin-top:7px">${rulesText(p.free_rules)}</div>`;
   } else if (p.category === 'low_cost') {
     if (p.address) body += `<div class="muted">${esc(p.address)}</div>`;
-    if (Number.isFinite(p.first_hour_won)) body += `<div class="fee-hi">1시간 예상 <b>${Number(p.first_hour_won).toLocaleString('ko-KR')}원</b><span class="fee-tag">저가</span></div>`;
+    // 그레이스(첫 1시간 무료)로 0원이면 라벨이 이미 설명하므로 요금 하이라이트 생략
+    if (Number.isFinite(p.first_hour_won) && p.first_hour_won > 0) body += `<div class="fee-hi">1시간 예상 <b>${Number(p.first_hour_won).toLocaleString('ko-KR')}원</b><span class="fee-tag">저가</span></div>`;
     body += `<div class="row">${Number(p.num_spaces) > 0 ? '주차면 ' + Number(p.num_spaces) + '면 · ' : ''}${esc(p.kind || '')} · ${esc(lowDetail(p))}</div>`;
     const fs = p.fee_structure || {};
     if (fs.daily_fee > 0) body += `<div class="muted">1일권 ${fs.daily_fee.toLocaleString('ko-KR')}원${fs.monthly_fee > 0 ? ` · 월정기 ${fs.monthly_fee.toLocaleString('ko-KR')}원` : ''}</div>`;
-    // 특기 무료창(공휴일/야간 등)이 있으면 타임라인+규칙으로 "언제 무료인지" 노출
+    // 실제 무료창(공휴일/야간 등 요일·시간대)이 있을 때만 타임라인 — 최초N분 그레이스는 무료창이 아님
+    const hasFreeWindow = (p.free_rules || []).some((r) => r.fee_type === '상시무료' || r.fee_type === '시간대무료');
+    if (hasFreeWindow) body += timelineHtml(p, refDate());
     if ((p.free_rules || []).some((r) => r.fee_type !== '유료')) {
-      body += timelineHtml(p, refDate());
       body += `<div class="row" style="margin-top:7px">${rulesText(p.free_rules)}</div>`;
     }
   }
@@ -433,7 +440,8 @@ function render() {
       const p = f.properties;
       if (cat === 'legal_free' && p.free_type && !activeFts.has(p.free_type)) continue;
       const ev = spotEval(f, now);
-      const isFreeNow = ev.state === 'free' || ev.state === 'partial';
+      // '지금 무료'는 진짜 무료(free)만 — 최초 N분 무료 같은 조건부(partial)는 무료로 세지 않음
+      const isFreeNow = ev.state === 'free';
       if (isPark && isFreeNow) freeNowFeatures.push({ f, ev });
       if (isPark && onlyFree && !isFreeNow) continue;
       count[cat]++;

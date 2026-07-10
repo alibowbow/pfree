@@ -26,18 +26,24 @@ test('looksLikeStandard', () => {
   assert.equal(looksLikeStandard(['a', 'b']), false);
 });
 
-test('deriveFreeRules — 무료/유료/혼합', () => {
+test('deriveFreeRules — 무료/유료/혼합(최초N분은 무료 아님)', () => {
   const { headers, rows } = parseCsv(CSV);
   const g = (i) => makeGetter(headers, rows[i]);
   assert.deepEqual(deriveFreeRules(g(0)), [{ day_type: '전일', fee_type: '상시무료' }]);      // 무료
   assert.equal(deriveFreeRules(g(1)), null);                                                    // 유료 → 제외
-  assert.deepEqual(deriveFreeRules(g(2)), [{ day_type: '전일', fee_type: '최초N분무료', first_free_minutes: 120 }]); // 혼합 무료구간
+  assert.equal(deriveFreeRules(g(2)), null);                                                    // 혼합(최초 120분 무료) → 무료 분류 금지
+  const mart = classifySpot(g(2));                                                              // 대신 저가로
+  assert.equal(mart.category, 'low_cost');
+  assert.equal(mart.first_hour_won, 0);                                                         // 첫 60분이 그레이스 안
+  assert.ok(mart.free_rules.some((r) => r.fee_type === '최초N분무료' && r.first_free_minutes === 120));
+  assert.ok(mart.free_rules.some((r) => r.fee_type === '유료'));
 });
 
 test('csvToFeatures — 무료+유효좌표만, 통계', () => {
   const { features, stats } = csvToFeatures(CSV);
   assert.equal(stats.total, 5);
-  assert.equal(stats.free, 4);       // 무료3 + 혼합무료1 (유료 제외)
+  assert.equal(stats.free, 3);       // 무료3 (유료 제외, 혼합 최초N분은 무료 아님)
+  assert.equal(stats.lowCost, 1);    // 마트주차장(최초 120분 무료 그레이스) → 저가
   assert.equal(stats.kept, 3);       // 좌표없음(A-4) 제외
   assert.equal(stats.badCoord, 1);
   const names = features.map((f) => f.properties.name);
@@ -59,7 +65,9 @@ test('Feature 스키마 — 좌표·id·free_rules·출처', () => {
   assert.equal(f.properties.num_spaces, 40);
   assert.deepEqual(f.properties.free_rules, [{ day_type: '전일', fee_type: '상시무료' }]);
   const mart = features.find((x) => x.properties.name === '마트주차장');
-  assert.equal(mart.properties.free_type, '시간제무료');
+  assert.equal(mart.properties.category, 'low_cost');   // 최초N분무료 → 무료 아님, 저가
+  assert.equal(mart.properties.free_type, undefined);
+  assert.equal(mart.properties.first_hour_won, 0);
 });
 
 test('중복 제거(같은 관리번호)', () => {
@@ -137,6 +145,7 @@ const LOW = [
   'L-2,공휴무료 저가주차장,공영,노상,서울 종로구 2로 2,20,유료,30,500,30,500,공휴일 무료,종로구청,37.57,126.98,2026-06-23', // 저가 + 공휴일 무료
   'L-3,도심타워,민영,노외,서울 강남구 3로 3,200,유료,10,1000,10,1000,,민간,37.50,127.03,2026-06-23',           // 6000원/h → 제외
   'L-4,경계밖 주차장,공영,노외,서울 성동구 4로 4,30,유료,30,600,30,600,,성동구청,37.56,127.04,2026-06-23',      // 1200원/h → 엄격 임계(1000) 초과, 제외
+  'L-5,오분무료 비싼주차장,민영,노외,서울 서초구 5로 5,50,혼합,5,0,10,1000,,민간,37.48,127.01,2026-06-23',       // 최초5분무료 + 이후 6000원/h → 무료도 저가도 아님
 ].join('\n');
 
 test('classifySpot — 저가 판정/제외/임계', () => {
@@ -149,6 +158,7 @@ test('classifySpot — 저가 판정/제외/임계', () => {
   assert.deepEqual(c1.fee_structure, { base_time: 30, base_fee: 500, unit_time: 30, unit_fee: 500, daily_fee: undefined, monthly_fee: undefined });
   assert.equal(classifySpot(g(2)).category, null); // 도심타워 6000/h 제외
   assert.equal(classifySpot(g(3)).category, null); // 1200/h — 엄격 임계(1,000원) 초과 제외
+  assert.equal(classifySpot(g(4)).category, null); // 최초5분무료 + 이후 비쌈 → 무료도 저가도 아님
   assert.equal(LOW_COST_MAX_WON, 1000);
 });
 
