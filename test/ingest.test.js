@@ -136,6 +136,7 @@ const LOW = [
   'L-1,장뜰시장주차장,공영,노외,경기 이천시 1로 1,40,유료,30,500,30,500,,이천시,37.27,127.44,2026-06-23',       // 1000원/h → 저가
   'L-2,공휴무료 저가주차장,공영,노상,서울 종로구 2로 2,20,유료,30,500,30,500,공휴일 무료,종로구청,37.57,126.98,2026-06-23', // 저가 + 공휴일 무료
   'L-3,도심타워,민영,노외,서울 강남구 3로 3,200,유료,10,1000,10,1000,,민간,37.50,127.03,2026-06-23',           // 6000원/h → 제외
+  'L-4,경계밖 주차장,공영,노외,서울 성동구 4로 4,30,유료,30,600,30,600,,성동구청,37.56,127.04,2026-06-23',      // 1200원/h → 엄격 임계(1000) 초과, 제외
 ].join('\n');
 
 test('classifySpot — 저가 판정/제외/임계', () => {
@@ -147,6 +148,8 @@ test('classifySpot — 저가 판정/제외/임계', () => {
   assert.ok(c1.first_hour_won <= LOW_COST_MAX_WON);
   assert.deepEqual(c1.fee_structure, { base_time: 30, base_fee: 500, unit_time: 30, unit_fee: 500, daily_fee: undefined, monthly_fee: undefined });
   assert.equal(classifySpot(g(2)).category, null); // 도심타워 6000/h 제외
+  assert.equal(classifySpot(g(3)).category, null); // 1200/h — 엄격 임계(1,000원) 초과 제외
+  assert.equal(LOW_COST_MAX_WON, 1000);
 });
 
 test('csvToFeatures — 저가 포함 + 통계 + 요금필드', () => {

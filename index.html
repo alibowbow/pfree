@@ -97,7 +97,7 @@
         <summary><span class="ico"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1.6 1.6 5 8 8.4 14.4 5 8 1.6z"/><path d="M1.6 8 8 11.4 14.4 8M1.6 11 8 14.4 14.4 11"/></svg></span>레이어</summary>
         <div class="ctl-body">
           <label class="chk"><input type="checkbox" id="lyr-free" checked> <span class="mpin"><svg viewBox="0 0 14 18"><path d="M7 .8C3.7.8 1 3.5 1 6.8c0 4.6 6 10.4 6 10.4s6-5.8 6-10.4C13 3.5 10.3.8 7 .8z" fill="#2f7355"/><text x="7" y="9.6" font-size="7.5" font-weight="700" text-anchor="middle" fill="#fff" font-family="'Pretendard Variable',sans-serif">P</text></svg></span> 합법 무료</label>
-          <label class="chk"><input type="checkbox" id="lyr-low" checked> <span class="mpin"><svg viewBox="0 0 14 18"><path d="M7 .8C3.7.8 1 3.5 1 6.8c0 4.6 6 10.4 6 10.4s6-5.8 6-10.4C13 3.5 10.3.8 7 .8z" fill="#3f6d99"/><text x="7" y="9.6" font-size="7.5" font-weight="700" text-anchor="middle" fill="#fff" font-family="'Pretendard Variable',sans-serif">P</text></svg></span> 저가 주차(1시간 ≤1,500원)</label>
+          <label class="chk"><input type="checkbox" id="lyr-low" checked> <span class="mpin"><svg viewBox="0 0 14 18"><path d="M7 .8C3.7.8 1 3.5 1 6.8c0 4.6 6 10.4 6 10.4s6-5.8 6-10.4C13 3.5 10.3.8 7 .8z" fill="#3f6d99"/><text x="7" y="9.6" font-size="7.5" font-weight="700" text-anchor="middle" fill="#fff" font-family="'Pretendard Variable',sans-serif">P</text></svg></span> 저가 주차(1시간 ≤1,000원)</label>
           <label class="chk"><input type="checkbox" id="lyr-gray"> <span class="mpin"><svg viewBox="0 0 14 18"><path d="M7 .8C3.7.8 1 3.5 1 6.8c0 4.6 6 10.4 6 10.4s6-5.8 6-10.4C13 3.5 10.3.8 7 .8z" fill="#94781f"/><text x="7" y="9.8" font-size="8" font-weight="700" text-anchor="middle" fill="#fff" font-family="'Pretendard Variable',sans-serif">!</text></svg></span> 단속 뜸한 곳(불법·정보)</label>
           <label class="chk"><input type="checkbox" id="lyr-np" checked> <span class="mpin np"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="#a5443a"/><text x="8" y="11" font-size="8" font-weight="700" text-anchor="middle" fill="#fff" font-family="'Pretendard Variable',sans-serif">P</text><line x1="3.5" y1="3.5" x2="12.5" y2="12.5" stroke="#fff" stroke-width="1.5"/></svg></span> 주차금지 경고</label>
         </div>
@@ -139,7 +139,7 @@
         <div class="ctl-body">
           <div class="lg"><span class="dot free"></span> 지금 무료</div>
           <div class="lg"><span class="dot partial"></span> 조건부 무료(최초 N분 등)</div>
-          <div class="lg"><span class="dot low"></span> 저가 주차(1시간 ≤1,500원)</div>
+          <div class="lg"><span class="dot low"></span> 저가 주차(1시간 ≤1,000원)</div>
           <div class="lg"><span class="dot paid"></span> 지금 유료 / 무료시간대 아님</div>
           <div class="lg"><span class="dot gray"></span> 단속 뜸함(불법·본인책임)</div>
           <div class="lg"><span class="dot warning"></span> 주정차 절대금지(경고)</div>
@@ -149,7 +149,7 @@
       <details class="ctl">
         <summary><span class="ico"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="8" cy="3.6" rx="5.2" ry="2.1"/><path d="M2.8 3.6v8.8c0 1.2 2.3 2.1 5.2 2.1s5.2-.9 5.2-2.1V3.6"/><path d="M2.8 8c0 1.2 2.3 2.1 5.2 2.1s5.2-.9 5.2-2.1"/></svg></span>데이터 출처</summary>
         <div class="ctl-body">
-          <p class="src">전국주차장정보표준데이터(<code>data.go.kr 15012896</code>, 2026-06-23) <b>무료 11,656곳 + 저가 2,930곳 기본 적용됨</b>(저가 = 1시간 예상 1,500원 이하). 특기사항의 ‘공휴일·야간 무료’ 조건도 반영. 최신 CSV를 받아 아래로 불러오면 갱신됩니다(PC·터미널 불필요).</p>
+          <p class="src">전국주차장정보표준데이터(<code>data.go.kr 15012896</code>, 2026-06-23) <b>무료 11,703곳 + 저가 1,392곳 기본 적용됨</b>(저가 = 1시간 예상 1,000원 이하). 특기사항의 ‘공휴일·야간 무료’ 조건도 반영. 최신 CSV를 받아 아래로 불러오면 갱신됩니다(PC·터미널 불필요).</p>
           <button id="btn-gov" class="btn block" style="margin-top:10px">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3m0 0L8 7m4-4l4 4M4 21h16"/></svg>
             공공데이터 CSV 불러오기
